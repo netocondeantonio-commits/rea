@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "rea": {
+      "command": "/absolute/path/to/rea/scripts/rea.mjs",
+      "args": ["mcp"],
+      "env": {
+        "GHIDRA_INSTALL_DIR": "/absolute/path/to/ghidra_12.1.4_PUBLIC",
+        "JAVA_HOME": "/absolute/path/to/jdk-21",
+        "REA_JADX_MCP_JAR": "/absolute/path/to/jadx-headless-mcp-0.7.1-all.jar"
+      }
+    }
+  }
+}
