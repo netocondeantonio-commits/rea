@@ -22,6 +22,8 @@
 
 [快速开始](#快速开始) · [REA 的工作原理](#rea-的工作原理) · [可以分析什么](#可以分析什么) · [案例](#案例) · [常见问题](#常见问题) · [GNU objdump 和 Rizin 工具](../reverse-engineering-tools.md) · [文档](#文档)
 
+[Cursor](../cursor-local-setup.md)
+
 <code>npx rea-agents setup</code>
 
 </div>

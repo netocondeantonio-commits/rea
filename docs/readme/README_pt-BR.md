@@ -257,6 +257,36 @@ Se você usa um agente, conclua a [atualização da configuração](#atualize-o-
 
 </details>
 
+## Setup completo no Cursor
+
+Esta seção descreve um checkout deste repositório dentro do Cursor, com os motores livres que o `rea doctor` consegue verificar. O guia completo está em [Setup local no Cursor](../cursor-local-setup.md).
+
+O REA continua local. `rea setup` não instala Java, Ghidra, Hopper nem IDA. O auxiliar `scripts/install-free-analysis-engines.mjs` baixa e confere os motores livres. Ele também não instala Java, Hopper nem IDA. Revise o plano e só então aprove:
+
+```text
+node scripts/install-free-analysis-engines.mjs
+set -a
+. "$HOME/.local/share/rea/cursor-engines.env"
+set +a
+node scripts/rea.mjs setup --client cursor --dry-run
+node scripts/rea.mjs setup --client cursor --yes
+```
+
+O arquivo `.cursor/mcp.json` deste checkout chama `scripts/cursor-mcp-launch.mjs`. Esse lançador lê `~/.local/share/rea/cursor-engines.env` e sobe o servidor `rea` e, ao lado, o servidor complementar `ghidra` (GhidraMCP). O Cursor não expande `$HOME` dentro de `mcp.json`. `rea setup` grava também `~/.cursor/mcp.json` com caminhos absolutos e instala a skill em `~/.agents/skills/reverse-engineer-anything`. Se os dois arquivos registrarem um servidor chamado `rea`, deixe só um ativo.
+
+O auxiliar deixa prontos, quando a plataforma permite:
+
+- Ghidra 12.1.4 em `GHIDRA_INSTALL_DIR`, com JDK 21 ou mais novo em `JAVA_HOME`. O JDK continua por sua conta.
+- O JAR `jadx-headless-mcp` 0.7.1 em `REA_JADX_MCP_JAR`, mais a CLI `jadx` 1.5.6.
+- Rizin 0.9.1 em `REA_RIZIN_COMMAND`, `objdump` em `REA_OBJDUMP_COMMAND` e `gdb` em `REA_GDB_COMMAND`.
+- Frida 17.23.2 e `frida-tools` 14.11.0, e o pacote `ghidra-mcp` 2.0 com o extra headless. O zip da extensão fica em `GHIDRA_MCP_EXTENSION_ZIP`. O modo com interface gráfica aponta para `GHIDRA_MCP_SERVER` (`http://127.0.0.1:8080/`).
+
+`jadx-ai-mcp` é um plugin da interface gráfica do JADX, não um motor headless do REA. Instale com `jadx plugins --install "github:zinja-coder:jadx-ai-mcp"` e siga o guia.
+
+IDA e Hopper são pagos ou proprietários. O auxiliar não os instala. O exemplo `docs/examples/ida-mcp.stub.json` é o registro anexado do `ida-pro-mcp`. Copie-o, preencha o caminho do `server.py` e aponte `REA_IDA_MCP_CONFIG` para essa cópia. Hopper entra só com `rea setup --client cursor --install-hopper`, depois de uma aprovação separada, ou com `HOPPER_LAUNCHER_PATH`.
+
+O mapa do que foi instalado e do que ficou documentado está em `docs/awesome-ai-reverse-engineering.md`. Essa página cita `zhuyansen/awesome-ai-reverse-engineering` sem copiar a lista.
+
 ## Documentação
 
 Comece pelos [guias práticos](https://rea.tools/pt-BR/guides/) do site. Para opções exatas, pré-requisitos e contratos dos resultados:

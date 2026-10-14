@@ -59,6 +59,11 @@ For runtime instrumentation, see the [Frida guide](./frida-instrumentation.md).
 | Capture and compare a command                       | [Process capture](process-capture.md)                                                                                                                                                                                                                                                                                       |
 | Use CLI/MCP and retain evidence                     | [CLI](cli.md), [MCP contracts](mcp-contracts.md), [agent prompts](mcp-prompts.md), [obligation ledgers](reconstruction-obligation-ledgers.md)                                                                                                                                                                               |
 
+For a source checkout inside Cursor, [Cursor local setup](cursor-local-setup.md)
+explains how to install the free engines doctor can check and what the owner
+still supplies for Hopper and IDA. The mapped complementary projects are listed
+in [Complementary reverse-engineering tools](awesome-ai-reverse-engineering.md).
+
 For development, use [testing](testing.md), [client verification](client-verification.md),
 [tool design](tool-design.md), and [releasing](releasing.md).
 [Reconstruction readiness](reconstruction-readiness.md) describes a development
