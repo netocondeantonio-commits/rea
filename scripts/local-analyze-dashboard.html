@@ -143,6 +143,9 @@
           frida: "Frida",
           doctor: "rea doctor",
           target: "Caminho local ou URL do GitHub",
+          subject: "Alvo",
+          engineHint:
+            "Caminho vazio mantém o valor que já está no ambiente. Só um administrador grava estes campos.",
           kind: "Tipo",
           auto: "Detectar",
           javascript: "JavaScript",
@@ -223,6 +226,9 @@
           frida: "Frida",
           doctor: "rea doctor",
           target: "Local path or GitHub URL",
+          subject: "Target",
+          engineHint:
+            "An empty path keeps the value already in the environment. Only an administrator saves these fields.",
           kind: "Type",
           auto: "Detect",
           javascript: "JavaScript",
@@ -342,7 +348,7 @@
             el("tr", {}, [
               el("th", { text: t("when") }),
               el("th", { text: t("state") }),
-              el("th", { text: t("target") }),
+              el("th", { text: t("subject") }),
               el("th", { text: t("who") }),
             ]),
           ]),
@@ -651,6 +657,7 @@
         return el("section", {}, [
           el("h1", { text: t("settings") }),
           el("p", { text: settings.tokenConfigured ? t("tokenOn") : t("tokenOff") }),
+          el("p", { class: "muted", text: t("engineHint") }),
           form,
           footer(),
         ]);
@@ -661,7 +668,11 @@
         if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
         const error = el("p", { class: "warn" });
         const username = el("input", { id: "new-user", type: "text" });
-        const password = el("input", { id: "new-password", type: "password" });
+        const password = el("input", {
+          id: "new-password",
+          type: "password",
+          autocomplete: "new-password",
+        });
         const role = el("select", { id: "new-role" }, [
           el("option", { value: "operator", text: t("operator") }),
           el("option", { value: "admin", text: t("admin") }),
