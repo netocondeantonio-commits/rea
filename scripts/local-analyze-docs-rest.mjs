@@ -134,8 +134,8 @@ const companionBlocks = (facts, lang) => [
       ),
     )} ${phrase(
       lang,
-      "Esse passo só lista dispositivos. Não anexa e não injeta.",
-      "That step only lists devices. It does not attach and does not inject.",
+      "Esse passo só lista dispositivos e não inicia o alvo. Não anexa e não injeta.",
+      "That step only lists devices and does not start the target. It does not attach and does not inject.",
     )}`,
   ],
   [

@@ -18,9 +18,17 @@ RUN apt-get update \
     util-linux \
     python3 \
     python3-venv \
-    openjdk-21-jre-headless \
-  && rm -rf /var/lib/apt/lists/* \
-  && ln -sfn "$(dirname "$(dirname "$(readlink -f /usr/bin/java)")")" /opt/java
+  && rm -rf /var/lib/apt/lists/*
+
+# Bookworm does not ship OpenJDK 21. Ghidra headless requires a JDK, not a JRE.
+RUN curl -fsSL -o /tmp/temurin.tar.gz \
+    https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz \
+  && echo "ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94  /tmp/temurin.tar.gz" | sha256sum -c - \
+  && mkdir -p /opt/java \
+  && tar -xzf /tmp/temurin.tar.gz -C /opt/java --strip-components=1 \
+  && rm /tmp/temurin.tar.gz \
+  && ln -sfn /opt/java/bin/java /usr/local/bin/java \
+  && /opt/java/bin/java -version
 
 RUN curl -fsSL -o /tmp/ghidra.zip \
     https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip \
@@ -65,6 +73,7 @@ ENV JAVA_HOME=/opt/java \
 
 WORKDIR /opt/rea
 COPY package.json package-lock.json ./
+COPY scripts/prepare.mjs scripts/prepare.mjs
 RUN npm ci
 COPY . .
 RUN npm run build \

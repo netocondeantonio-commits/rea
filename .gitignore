@@ -61,6 +61,7 @@ Thumbs.db
 
 # Local admin credentials. See docs/examples/rea-admin.env.example.
 /.env
+/deploy/.env
 
 # Local Cloudflare development state
 /website/.wrangler/

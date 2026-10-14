@@ -28,7 +28,7 @@ must call the API.
 
 Health: `GET /api/health`. API notes: `GET /api/docs` and `GET /api/openapi.json`.
 
-The image installs Ghidra 12.1.4 headless, OpenJDK 21, jadx-headless-mcp 0.7.1,
+The image installs Ghidra 12.1.4 headless, Eclipse Temurin JDK 21, jadx-headless-mcp 0.7.1,
 Rizin 0.9.1, Apktool 3.0.3, objdump, and Frida tools 14.11.0. The service
 limit in Compose is 6g of RAM and 2 CPUs. A job isolate defaults to 2048 MB.
 
@@ -36,6 +36,8 @@ limit in Compose is 6g of RAM and 2 CPUs. A job isolate defaults to 2048 MB.
 
 `REA_SANDBOX=1` is set in this Compose file. The default mode is `isolate`:
 `unshare --user --map-root-user --net`, then `taskset`, then `prlimit`.
+Docker's default seccomp blocks `unshare`, so Compose sets
+`seccomp:unconfined` on this service.
 The address-space cap is four times the requested RAM because a JVM reserves
 more virtual memory than its heap. `JAVA_TOOL_OPTIONS` sets `-Xmx` to about
 60% of that RAM. The container `mem_limit` is the host cgroup for the whole
@@ -100,7 +102,7 @@ Use `REA_CORS_ORIGIN` com uma origem exata quando outro site precisa chamar a AP
 
 Saúde: `GET /api/health`. Notas: `GET /api/docs` e `GET /api/openapi.json`.
 
-A imagem instala o Ghidra 12.1.4 headless, OpenJDK 21, jadx-headless-mcp
+A imagem instala o Ghidra 12.1.4 headless, Eclipse Temurin JDK 21, jadx-headless-mcp
 0.7.1, Rizin 0.9.1, Apktool 3.0.3, objdump e Frida tools 14.11.0. O limite
 do serviço no Compose é 6g de RAM e 2 CPUs. O isolate de cada análise usa
 2048 MB por padrão.
@@ -109,6 +111,8 @@ do serviço no Compose é 6g de RAM e 2 CPUs. O isolate de cada análise usa
 
 `REA_SANDBOX=1` está neste Compose. O modo padrão é `isolate`:
 `unshare --user --map-root-user --net`, depois `taskset` e `prlimit`.
+O seccomp padrão do Docker bloqueia `unshare`, então o Compose define
+`seccomp:unconfined` neste serviço.
 O teto de espaço de endereços é quatro vezes a RAM pedida, porque a JVM
 reserva mais memória virtual do que o heap. `JAVA_TOOL_OPTIONS` define
 `-Xmx` em cerca de 60% dessa RAM. O `mem_limit` do contêiner é o cgroup do

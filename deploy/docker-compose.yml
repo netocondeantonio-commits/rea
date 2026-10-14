@@ -22,6 +22,9 @@ services:
       REA_COOKIE_SECURE: "1"
     mem_limit: 6g
     cpus: "2"
+    # Docker's default seccomp blocks unshare. Isolate needs it for a network namespace.
+    security_opt:
+      - seccomp:unconfined
     healthcheck:
       test:
         [
