@@ -2,8 +2,14 @@ import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { attachEvidence, gateFast } from "./local-admin-extra.mjs";
 import { downloadPinned, pinnedDigest } from "./local-admin-pins.mjs";
-import { mergedEnv, saveIndex, writeJobFile } from "./local-analyze-jobs.mjs";
+import {
+  mergedEnv,
+  saveIndex,
+  setResourceLimits,
+  writeJobFile,
+} from "./local-analyze-jobs.mjs";
 import { writeLocalPackage } from "./local-analyze-package.mjs";
 import { writeLocalReport } from "./local-analyze-report.mjs";
 
@@ -34,8 +40,36 @@ const persist = async (job) => {
     });
   }
   await writeLocalReport(job);
+  await attachLocalEvidence(job);
   await writeJobFile(job);
   await saveIndex(job);
+};
+
+const attachLocalEvidence = async (job) => {
+  try {
+    const secret =
+      typeof tools.integritySecret === "function"
+        ? tools.integritySecret()
+        : "";
+    const extra = await attachEvidence(job.directory, job, secret);
+    job.digest = extra.digest;
+    job.signature = extra.signature;
+    job.checklist = extra.checklist;
+  } catch (cause) {
+    job.events.push({
+      message: `Hashes não escritos: ${cause instanceof Error ? cause.message : cause}`,
+    });
+  }
+};
+
+const finishHook = async (job) => {
+  if (job.finishedNotified || typeof tools.onFinished !== "function") return;
+  job.finishedNotified = true;
+  try {
+    await tools.onFinished(job);
+  } catch {
+    job.events.push({ message: "Aviso de conclusão não foi enviado." });
+  }
 };
 
 const failJob = async (job, detected, message, note) => {
@@ -47,12 +81,14 @@ const failJob = async (job, detected, message, note) => {
   job.state = "failed";
   await writeJobFile(job);
   await saveIndex(job);
+  await finishHook(job);
 };
 
 const markCancelled = async (job, note) => {
   job.state = "cancelled";
   if (job.events.at(-1)?.message !== "Cancelado.") note("Cancelado.");
   await persist(job);
+  await finishHook(job);
 };
 
 const githubRejected = (owner, repo) =>
@@ -176,7 +212,7 @@ const recordStep = async (job, step, note) => {
   return "ok";
 };
 
-export const analyze = async (job, onUpdate) => {
+const runAnalysis = async (job, onUpdate) => {
   const note = (message) => {
     job.events.push({ message });
     onUpdate();
@@ -192,7 +228,10 @@ export const analyze = async (job, onUpdate) => {
   job.resolved = source;
   job.detected = await chosenKind(job, source, note);
   await mkdir(join(job.directory, "evidence"), { recursive: true });
-  const steps = await tools.planSteps(job.detected, source, job.abort?.signal);
+  const gated = gateFast(job.fast === true, job.detected);
+  const steps = gated.usePlan
+    ? await tools.planSteps(job.detected, source, job.abort?.signal)
+    : [{ id: "fast-unsupported", title: "Modo rápido", skip: gated.skip }];
   if (job.abort?.signal.aborted) {
     await markCancelled(job, note);
     return;
@@ -218,9 +257,20 @@ export const analyze = async (job, onUpdate) => {
     job.state = "cancelled";
     await writeJobFile(job);
     await saveIndex(job);
+    await finishHook(job);
     return;
   }
   job.state = job.steps.some((step) => step.ok) ? "done" : "failed";
   await writeJobFile(job);
   await saveIndex(job);
+  await finishHook(job);
+};
+
+export const analyze = async (job, onUpdate) => {
+  setResourceLimits({ cpuNice: job.cpuNice ?? 0 });
+  try {
+    await runAnalysis(job, onUpdate);
+  } finally {
+    setResourceLimits({ cpuNice: 0 });
+  }
 };

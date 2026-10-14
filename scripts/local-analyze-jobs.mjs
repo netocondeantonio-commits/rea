@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { takeHighest } from "./local-admin-extra.mjs";
 
 /** In-memory queue and the on-disk job index. One analysis runs at a time. */
 
@@ -17,6 +18,11 @@ const JOB_KEYS = [
   "target",
   "kind",
   "user",
+  "priority",
+  "fast",
+  "cpuNice",
+  "ramLimitMb",
+  "scheduleTargetId",
   "createdAt",
   "state",
   "detected",
@@ -28,20 +34,46 @@ const JOB_KEYS = [
   "report_markdown",
   "package_slug",
   "artifacts",
+  "digest",
+  "signature",
+  "checklist",
 ];
 const STEP_KEYS = ["id", "title", "ok", "skip", "facts", "stderr"];
 
 let engineEnv = () => ({});
+let resourceLimits = { cpuNice: 0 };
 let indexPath = "";
 const summaries = new Map();
 const waiting = [];
 let pumping = false;
+
+const clampInt = (value, max) => {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > max) return 0;
+  return number;
+};
+
+const priorityOf = (value) => {
+  const number = Number(value);
+  return number === -1 || number === 1 ? number : 0;
+};
+
+const scheduleId = (value) =>
+  typeof value === "string" && /^[A-Za-z0-9_-]{1,32}$/u.test(value)
+    ? value
+    : undefined;
 
 export const setEngineEnv = (reader) => {
   engineEnv = reader;
 };
 
 export const mergedEnv = () => ({ ...process.env, ...engineEnv() });
+
+export const setResourceLimits = (limits) => {
+  resourceLimits = { cpuNice: clampInt(limits?.cpuNice, 19) };
+};
+
+export const currentLimits = () => resourceLimits;
 
 export const bindOutput = (output) => {
   indexPath = join(output, "index.json");
@@ -57,6 +89,11 @@ export const createJob = (output, target, extra = {}) => {
       typeof extra.user === "string" && extra.user.length > 0
         ? extra.user
         : "cli",
+    priority: priorityOf(extra.priority),
+    fast: extra.fast === true,
+    cpuNice: clampInt(extra.cpuNice, 19),
+    ramLimitMb: clampInt(extra.ramLimitMb, 65536),
+    scheduleTargetId: scheduleId(extra.scheduleTargetId),
     createdAt: new Date().toISOString(),
     state: "queued",
     detected: null,
@@ -91,6 +128,8 @@ const summaryOf = (job) => ({
   target: job.target,
   kind: job.kind ?? "auto",
   user: job.user ?? "cli",
+  priority: job.priority ?? 0,
+  fast: job.fast === true,
   createdAt: job.createdAt ?? "",
   state: job.state,
   detected: job.detected ?? null,
@@ -182,7 +221,7 @@ const pump = async () => {
   pumping = true;
   try {
     while (waiting.length > 0) {
-      const next = waiting.shift();
+      const next = takeHighest(waiting);
       if (next.job.state === "cancelled") continue;
       try {
         await next.analyze(next.job, () => {});

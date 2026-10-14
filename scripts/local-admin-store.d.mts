@@ -10,6 +10,10 @@ export interface AdminSettings {
   language: string;
   theme: string;
   engines: Record<string, string>;
+  webhookUrl: string;
+  telegramChatId: string;
+  cpuNice: number;
+  ramLimitMb: number;
 }
 
 export interface LocalAdmin {
@@ -42,6 +46,18 @@ export interface LocalAdmin {
     note_en?: string;
   }) => Promise<{ error?: string; error_en?: string }>;
   removeTarget: (id: string) => Promise<{ ok?: boolean }>;
+  patchTarget: (
+    id: string,
+    input: {
+      everyMinutes?: number | null;
+      nextRun?: string;
+      lastDigest?: string;
+    },
+  ) => Promise<{
+    error?: string;
+    error_en?: string;
+    target?: { id: string; everyMinutes?: number; lastDigest?: string };
+  }>;
   readSettings: () => AdminSettings;
   writeSettings: (
     input: {
@@ -49,6 +65,10 @@ export interface LocalAdmin {
       language?: string;
       theme?: string;
       engines?: Record<string, string>;
+      webhookUrl?: string;
+      telegramChatId?: string;
+      cpuNice?: number;
+      ramLimitMb?: number;
     },
     role: string,
   ) => Promise<AdminSettings>;

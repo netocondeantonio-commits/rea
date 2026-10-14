@@ -74,6 +74,38 @@ curl -sS -X POST http://127.0.0.1:4174/api/analyze \
 `REA_ADMIN_DIR` chooses where users, settings, targets, and the audit log are
 stored. The default is `~/.local/share/rea/admin`.
 
+## Extra local tools
+
+The same loopback process, still with no model, can:
+
+- Diff two finished jobs: `hashes.sha256`, `strings.txt`, and OpenAPI paths. Added and removed lines are capped.
+- Repeat a saved target every N minutes (15 minimum) while the page process stays up. The timer stops when the process stops. A webhook and an audit row are written only when the manifest SHA-256 changes. The first run only stores the digest.
+- Queue with low, normal, and high priority. A running job is not preempted. `nice` 0–19 is applied to the child when the `nice` binary exists. A requested RAM number is stored and shown. **TODO:** there is no cgroup, so that RAM number is not enforced.
+- Write `hashes.sha256` for the evidence files. When the local admin secret has at least 16 characters, `signature.txt` is an HMAC-SHA256 of that manifest. It is a local integrity tag, not a public code-signing certificate.
+- Show an observation checklist with green, amber, and red. Red is an engine step that failed. Routes, Android permission names, and `http://` URLs are copied from files already on disk. This is not an OWASP certificate and it does not mean the program is safe.
+- Search `.txt`, `.json`, and `.md` evidence for strings, routes, and `android.permission` names.
+- Export client, internal, and CTF PDFs. The CTF template does not invent a flag or a solution. The font covers common Portuguese letters; other characters become `?`.
+- POST an optional webhook when a manual job finishes. Discord hosts receive `{content}`. `api.telegram.org` receives `{text}` plus `chat_id` when that field is set. Any other `http` or `https` URL receives `{event, job}`. The audit log stores the HTTP status, not the URL. A Telegram bot token lives in the path; do not commit it.
+- Mint a read-only `/r/<token>` link for about seven days. **It answers only on 127.0.0.1.** It is not an internet address.
+- Export and import engine configuration. Keys outside the engine list, including `PATH` and `LD_PRELOAD`, are dropped.
+- Run a fast mode for JavaScript and static sites. That mode does not call Ghidra or JADX. For an APK, a native file, or .NET it records a skip and does not call those engines.
+
+**TODO:** Docker sandbox mode is not enabled. This repository does not ship a maintained image, and the page does not start Docker or run the target in a container.
+
+## License and a paid service
+
+This is not legal advice. It only points at files in this repository.
+
+REA's own `LICENSE` is MIT, Copyright (c) 2026 morluto. That license allows use, copying, modification, merging, publishing, distribution, sublicensing, and selling copies, if the copyright and permission notices stay with the software. There is no warranty. MIT alone does not forbid charging for a service built from REA's code. It also does not license Ghidra, JADX, Frida, GDB, Rizin, IDA, Hopper, or JEB.
+
+`THIRD_PARTY_NOTICES.md` says to verify permissions before publishing analysis output, sharing tool access, or operating a service. A summary does not interpret a contract. An IDA API does not grant hosting or extra-user rights. JEB's published EULA restricts public disclosure of decompiled code, reconstructed artifacts, and analysis reports unless the edition permits it.
+
+Ghidra, JADX, jadx-headless-mcp, and Apktool are recorded as Apache-2.0. Redistributing those binaries means keeping LICENSE and NOTICE. Ghidra also contains GPL modules; the top-level notice does not replace a full distribution's notices. GDB is GPL-3.0-or-later: invoking a binary that is already installed is not, by itself, distributing it; distributing the binary or linking it into a product does trigger copyleft. Frida is LGPL-2.0 with the WxWindows exception. That exception covers some binary-object distributions under your own terms. It does not decide a multi-tenant service. IDA, Hopper, and JEB are proprietary tools. REA does not grant those licenses.
+
+Rizin and GhidraMCP are not in the repository license table. From that inventory the answer is `NOT_ENOUGH_INFO`. A caller-supplied OpenJDK is GPLv2 with the Classpath exception. Node.js is MIT.
+
+A paid product, if you build one, stays in another repository. This page was not turned into a hosted service. Doing that would have to satisfy each license above, especially the IDA, Hopper, and JEB EULAs and the copyleft pieces in Frida, GDB, and Ghidra's GPL modules.
+
 ## What does not change
 
 `npm start` is still the stdio MCP server. `rea setup` does not open this

@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { handleRequest } from "./local-admin-routes.mjs";
+import { createShareStore } from "./local-admin-share.mjs";
+import { startSchedule } from "./local-admin-schedule.mjs";
 import { openAdmin } from "./local-admin-store.mjs";
 import { json } from "./local-admin-reply.mjs";
 import { loadHistory, setEngineEnv } from "./local-analyze-jobs.mjs";
@@ -34,6 +36,13 @@ export const startLocalDashboard = async (deps) => {
   setEngineEnv(() => admin.engineEnv());
   if (!deps.options.baseOutput) deps.options.baseOutput = deps.options.output;
   await loadHistory(deps.options.output, deps.jobs);
+  const shares = await createShareStore(admin.directory);
+  const stopSchedule = startSchedule({
+    admin,
+    jobs: deps.jobs,
+    output: () => deps.options.output,
+    analyze: deps.analyze,
+  });
   const dashboard = await readFile(deps.dashboardPath);
   const server = createServer((request, response) => {
     handleRequest({
@@ -43,6 +52,7 @@ export const startLocalDashboard = async (deps) => {
       options: deps.options,
       analyze: deps.analyze,
       admin,
+      shares,
       dashboard,
       runRea: deps.runRea,
       commandExists: deps.commandExists,
@@ -60,6 +70,7 @@ export const startLocalDashboard = async (deps) => {
     url,
     close: () =>
       new Promise((resolveClose, rejectClose) => {
+        stopSchedule();
         server.close((error) => (error ? rejectClose(error) : resolveClose()));
       }),
   };

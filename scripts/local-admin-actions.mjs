@@ -80,9 +80,14 @@ export const postAnalyze = async (ctx) => {
     return;
   }
   const kind = KINDS.has(body.kind) ? body.kind : "auto";
+  const settings = ctx.admin.readSettings();
   const job = createJob(await outputDir(ctx), target, {
     kind,
     user: ctx.actor.user,
+    priority: body.priority,
+    fast: body.fast === true,
+    cpuNice: settings.cpuNice,
+    ramLimitMb: settings.ramLimitMb,
   });
   ctx.jobs.set(job.id, job);
   await saveIndex(job);
@@ -117,9 +122,14 @@ export const postRerun = async (ctx, id) => {
     return;
   }
   const kind = KINDS.has(existing.kind) ? existing.kind : "auto";
+  const settings = ctx.admin.readSettings();
   const job = createJob(await outputDir(ctx), existing.target, {
     kind,
     user: ctx.actor.user,
+    priority: existing.priority,
+    fast: existing.fast === true,
+    cpuNice: settings.cpuNice,
+    ramLimitMb: settings.ramLimitMb,
   });
   ctx.jobs.set(job.id, job);
   await saveIndex(job);

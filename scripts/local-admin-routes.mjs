@@ -27,6 +27,7 @@ import {
   postUser,
   putSettings,
 } from "./local-admin-actions.mjs";
+import { extraRoutes, tryShare } from "./local-admin-extra-routes.mjs";
 import { fail, json, readJsonBody, send } from "./local-admin-reply.mjs";
 import { safeChildPath } from "./local-analyze-text.mjs";
 
@@ -193,6 +194,7 @@ const ROUTES = [
     run: deleteUser,
   },
   { method: "GET", pattern: /^\/api\/audit$/u, role: "admin", run: getAudit },
+  ...extraRoutes,
 ];
 
 const dispatch = async (ctx, url) => {
@@ -287,6 +289,7 @@ export const handleRequest = async (ctx) => {
     await postLogin(ctx);
     return;
   }
+  if (await tryShare(ctx, url)) return;
   const actor = identify(ctx.request, ctx.admin);
   if (!actor) {
     fail(ctx.response, 401, "Entre para continuar.", "Sign in to continue.");

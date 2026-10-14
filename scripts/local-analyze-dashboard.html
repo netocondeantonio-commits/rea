@@ -59,6 +59,10 @@
       p { line-height: 1.45; }
       .muted { color: var(--muted); }
       .warn { color: var(--warn); }
+      .light { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+      .light.green { background: #1f6b4a; }
+      .light.amber { background: #c47b12; }
+      .light.red { background: #9b2c2c; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
       .card, form.card, table {
         background: var(--card);
@@ -192,6 +196,38 @@
           footer: "Painel só neste computador. Não é um serviço hospedado. A CLI e o MCP do REA continuam iguais.",
           saved: "Guardado.",
           error: "Não foi possível concluir.",
+          compare: "Comparar",
+          search: "Busca",
+          priority: "Prioridade",
+          low: "baixa",
+          normal: "normal",
+          high: "alta",
+          fast: "Modo rápido (só JavaScript ou site)",
+          limitsNote: "O modo sandbox Docker não está habilitado. Um número de RAM é só um pedido: esta página não aplica cgroup.",
+          checklist: "Lista de observações",
+          signatureHint: "A assinatura é uma etiqueta HMAC local. Não é um certificado público.",
+          ramNote: "O limite de RAM pedido não é aplicado com cgroup.",
+          share: "Link só neste computador",
+          shareHint: "O endereço funciona enquanto este painel estiver aberto, só em 127.0.0.1, por cerca de 7 dias.",
+          client: "PDF cliente",
+          internal: "PDF interno",
+          ctf: "PDF CTF",
+          schedule: "Repetir",
+          scheduleHint: "Minutos, mínimo 15. A repetição para quando o painel fecha. O aviso sai só se o hash mudar.",
+          webhook: "Webhook (Discord, Telegram ou JSON)",
+          chat: "chat_id do Telegram",
+          nice: "nice do processo (0 a 19)",
+          ram: "RAM pedida em MB (não aplicada)",
+          exportEngines: "Exportar motores",
+          importEngines: "Importar motores",
+          notEnabled: "Ainda não habilitado",
+          dockerNote: "Sandbox Docker: não habilitado. Não há imagem mantida e o alvo não é executado num contêiner.",
+          query: "Texto",
+          find: "Procurar",
+          left: "Versão A",
+          right: "Versão B",
+          added: "Entrou",
+          removed: "Saiu",
         },
         en: {
           title: "Local admin",
@@ -275,6 +311,38 @@
           footer: "This page stays on this computer. It is not a hosted service. The REA CLI and MCP stay the same.",
           saved: "Saved.",
           error: "That did not finish.",
+          compare: "Compare",
+          search: "Search",
+          priority: "Priority",
+          low: "low",
+          normal: "normal",
+          high: "high",
+          fast: "Fast mode (JavaScript or site only)",
+          limitsNote: "Docker sandbox mode is not enabled. A RAM number is only a request: this page does not apply a cgroup.",
+          checklist: "Observation list",
+          signatureHint: "The signature is a local HMAC tag. It is not a public certificate.",
+          ramNote: "The requested RAM cap is not enforced with a cgroup.",
+          share: "Link on this computer only",
+          shareHint: "The address works while this page is open, only on 127.0.0.1, for about 7 days.",
+          client: "Client PDF",
+          internal: "Internal PDF",
+          ctf: "CTF PDF",
+          schedule: "Repeat",
+          scheduleHint: "Minutes, 15 minimum. Repeating stops when the page stops. A notice is sent only when the hash changes.",
+          webhook: "Webhook (Discord, Telegram, or JSON)",
+          chat: "Telegram chat_id",
+          nice: "Process nice (0 to 19)",
+          ram: "Requested RAM MB (not enforced)",
+          exportEngines: "Export engines",
+          importEngines: "Import engines",
+          notEnabled: "Not enabled",
+          dockerNote: "Docker sandbox: not enabled. There is no maintained image, and the target is not run in a container.",
+          query: "Text",
+          find: "Search",
+          left: "Version A",
+          right: "Version B",
+          added: "Added",
+          removed: "Removed",
         },
       };
 
@@ -416,6 +484,10 @@
           target,
           el("label", { for: "kind", text: t("kind") }),
           kindSelect("auto"),
+          el("label", { for: "priority", text: t("priority") }),
+          prioritySelect(),
+          el("label", { for: "fast", text: t("fast") }),
+          checkbox("fast"),
           el("button", { class: "primary", type: "submit", text: t("run") }),
           error,
         ]);
@@ -427,6 +499,8 @@
             body: JSON.stringify({
               target: target.value,
               kind: form.querySelector("#kind").value,
+              priority: Number(form.querySelector("#priority").value),
+              fast: form.querySelector("#fast").checked,
             }),
           });
           if (!response.ok) {
@@ -438,10 +512,37 @@
         return el("section", {}, [
           el("h1", { text: t("fresh") }),
           el("p", { class: "muted", text: t("runHint") }),
+          el("p", { class: "warn", text: t("limitsNote") }),
           form,
+          notEnabledCard(),
           footer(),
         ]);
       };
+
+      const prioritySelect = () => {
+        const select = el("select", { id: "priority", name: "priority" });
+        for (const [value, label] of [
+          ["0", "normal"],
+          ["1", "high"],
+          ["-1", "low"],
+        ]) {
+          select.append(el("option", { value, text: t(label) }));
+        }
+        return select;
+      };
+
+      const checkbox = (id) => {
+        const input = el("input", { id, type: "checkbox" });
+        input.style.width = "auto";
+        return input;
+      };
+
+      const notEnabledCard = () =>
+        el("article", { class: "card" }, [
+          el("h2", { text: t("notEnabled") }),
+          el("p", { text: t("dockerNote") }),
+          el("p", { text: t("ramNote") }),
+        ]);
 
       const artifactCards = (job) => {
         const wrap = el("div", { class: "grid" });
@@ -487,6 +588,22 @@
         if (/^[A-Za-z0-9-]+$/u.test(job.id)) {
           actions.append(el("a", { href: `/api/jobs/${job.id}/export.zip`, text: t("zip") }));
           actions.append(el("a", { href: `/reports/${job.id}`, text: t("report") }));
+          for (const template of ["client", "internal", "ctf"]) {
+            actions.append(
+              el("a", {
+                href: `/api/jobs/${job.id}/report.pdf?template=${template}`,
+                text: t(template),
+              }),
+            );
+          }
+          const share = el("button", { type: "button", text: t("share") });
+          share.addEventListener("click", async () => {
+            const response = await api(`/api/jobs/${job.id}/share`, { method: "POST" });
+            if (!response.ok) return;
+            sessionStorage.setItem(`rea-share-${job.id}`, response.body.path);
+            await show("job");
+          });
+          actions.append(share);
         }
         const log = el("ul");
         for (const event of job.events ?? []) log.append(el("li", { text: event.message }));
@@ -496,11 +613,33 @@
         const section = el("section", {}, [
           el("h1", { text: stateLabel(job.state) }),
           el("p", { text: job.target }),
-          el("p", { class: "muted", text: `${job.kind ?? "auto"} · ${job.user ?? ""}` }),
+          el("p", {
+            class: "muted",
+            text: `${job.kind ?? "auto"} · ${job.user ?? ""} · ${t(job.priority === 1 ? "high" : job.priority === -1 ? "low" : "normal")}${job.fast ? " · fast" : ""}`,
+          }),
           actions,
           el("h2", { text: t("log") }),
           log,
         ]);
+        if (job.digest) section.append(el("p", { text: `SHA-256 ${job.digest}` }));
+        if (job.signature) section.append(el("p", { class: "muted", text: t("signatureHint") }));
+        if (job.ramLimitMb > 0) section.append(el("p", { class: "warn", text: t("ramNote") }));
+        const shared = sessionStorage.getItem(`rea-share-${job.id}`);
+        if (shared) {
+          section.append(el("p", { text: `${location.origin}${shared}` }));
+          section.append(el("p", { class: "muted", text: t("shareHint") }));
+        }
+        const checks = el("ul");
+        for (const item of job.checklist?.items ?? []) {
+          const row = el("li");
+          row.append(
+            el("span", { class: `light ${item.status}` }),
+            document.createTextNode(lang === "en" ? item.observation_en : item.observation),
+          );
+          checks.append(row);
+        }
+        if ((job.checklist?.items ?? []).length > 0)
+          section.append(el("h2", { text: t("checklist") }), checks);
         if (map) {
           section.append(el("h2", { text: t("map") }));
           section.append(el("img", { class: "map", alt: t("map"), src: map.href }));
@@ -573,12 +712,33 @@
             await show("library");
           });
           const noteText = lang === "en" ? item.note_en : item.note_pt;
+          const minutes = el("input", {
+            type: "number",
+            min: "15",
+            value: item.everyMinutes ?? "",
+          });
+          minutes.style.width = "8rem";
+          minutes.setAttribute("aria-label", t("schedule"));
+          const saveSchedule = el("button", { type: "button", text: t("schedule") });
+          saveSchedule.addEventListener("click", async () => {
+            const raw = minutes.value.trim();
+            const response = await api(`/api/targets/${item.id}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                everyMinutes: raw.length === 0 ? 0 : Number(raw),
+              }),
+            });
+            if (!response.ok) error.textContent = message(response.body);
+            else await show("library");
+          });
           list.append(
             el("article", { class: "card" }, [
               el("h2", { text: item.name }),
               el("p", { text: item.target }),
               el("p", { class: "muted", text: noteText || item.kind }),
-              el("div", { class: "row" }, [analyze, remove]),
+              el("p", { class: "muted", text: t("scheduleHint") }),
+              el("div", { class: "row" }, [analyze, minutes, saveSchedule, remove]),
             ]),
           );
         }
@@ -619,6 +779,25 @@
           el("label", { for: "language", text: t("language") }),
           kindSelect(settings.language === "en" ? "en" : "auto"),
           engineFields(settings.engines),
+          el("label", { for: "webhook", text: t("webhook") }),
+          el("input", { id: "webhook", type: "text", value: settings.webhookUrl ?? "" }),
+          el("label", { for: "chat", text: t("chat") }),
+          el("input", { id: "chat", type: "text", value: settings.telegramChatId ?? "" }),
+          el("label", { for: "nice", text: t("nice") }),
+          el("input", {
+            id: "nice",
+            type: "number",
+            min: "0",
+            max: "19",
+            value: String(settings.cpuNice ?? 0),
+          }),
+          el("label", { for: "ram", text: t("ram") }),
+          el("input", {
+            id: "ram",
+            type: "number",
+            min: "0",
+            value: String(settings.ramLimitMb ?? 0),
+          }),
           el("button", { class: "primary", type: "submit", text: t("save") }),
           notice,
         ]);
@@ -645,6 +824,10 @@
               language: language.value,
               theme,
               engines,
+              webhookUrl: form.querySelector("#webhook").value,
+              telegramChatId: form.querySelector("#chat").value,
+              cpuNice: Number(form.querySelector("#nice").value),
+              ramLimitMb: Number(form.querySelector("#ram").value),
             }),
           });
           notice.textContent = response.ok ? t("saved") : message(response.body);
@@ -654,11 +837,153 @@
             paintNav();
           }
         });
+        const engineTools = el("div", { class: "row" });
+        const exportEngines = el("button", { type: "button", text: t("exportEngines") });
+        exportEngines.addEventListener("click", async () => {
+          const response = await api("/api/settings/engines");
+          if (!response.ok) {
+            notice.textContent = message(response.body);
+            return;
+          }
+          const blob = new Blob([JSON.stringify(response.body, null, 2)], {
+            type: "application/json",
+          });
+          const link = el("a", { href: URL.createObjectURL(blob), download: "rea-engines.json" });
+          link.click();
+        });
+        const importInput = el("input", { id: "import-engines", type: "file", accept: "application/json" });
+        importInput.style.width = "auto";
+        importInput.addEventListener("change", async () => {
+          const file = importInput.files?.[0];
+          if (!file) return;
+          let parsed;
+          try {
+            parsed = JSON.parse(await file.text());
+          } catch {
+            notice.textContent = t("error");
+            return;
+          }
+          const response = await api("/api/settings/engines", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(parsed),
+          });
+          notice.textContent = response.ok ? t("saved") : message(response.body);
+          if (response.ok) await show("settings");
+        });
+        engineTools.append(
+          exportEngines,
+          el("label", { for: "import-engines", text: t("importEngines") }),
+          importInput,
+        );
         return el("section", {}, [
           el("h1", { text: t("settings") }),
           el("p", { text: settings.tokenConfigured ? t("tokenOn") : t("tokenOff") }),
           el("p", { class: "muted", text: t("engineHint") }),
           form,
+          engineTools,
+          notEnabledCard(),
+          footer(),
+        ]);
+      };
+
+      const jobOptions = (jobs, id) => {
+        const select = el("select", { id });
+        for (const job of jobs) {
+          select.append(
+            el("option", {
+              value: job.id,
+              text: `${job.createdAt ?? ""} ${job.target ?? ""}`.slice(0, 120),
+            }),
+          );
+        }
+        return select;
+      };
+
+      const renderCompare = async () => {
+        const result = await api("/api/jobs");
+        const jobs = result.body ?? [];
+        const output = el("div");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "left", text: t("left") }),
+          jobOptions(jobs, "left"),
+          el("label", { for: "right", text: t("right") }),
+          jobOptions(jobs, "right"),
+          el("button", { class: "primary", type: "submit", text: t("compare") }),
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/diff", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              left: form.querySelector("#left").value,
+              right: form.querySelector("#right").value,
+            }),
+          });
+          output.replaceChildren();
+          if (!response.ok) {
+            output.append(el("p", { class: "warn", text: message(response.body) }));
+            return;
+          }
+          for (const key of ["hashes", "strings", "routes"]) {
+            const row = response.body[key] ?? {};
+            output.append(
+              el("article", { class: "card" }, [
+                el("h2", { text: key }),
+                el("p", { text: `${t("added")}: ${(row.added ?? []).join("\n") || "—"}` }),
+                el("p", { text: `${t("removed")}: ${(row.removed ?? []).join("\n") || "—"}` }),
+              ]),
+            );
+          }
+        });
+        return el("section", {}, [
+          el("h1", { text: t("compare") }),
+          jobs.length < 2 ? el("p", { class: "muted", text: t("empty") }) : form,
+          output,
+          footer(),
+        ]);
+      };
+
+      const renderSearch = () => {
+        const output = el("div");
+        const query = el("input", { id: "query", type: "text" });
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "query", text: t("query") }),
+          query,
+          el("button", { class: "primary", type: "submit", text: t("find") }),
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api(`/api/search?q=${encodeURIComponent(query.value)}`);
+          output.replaceChildren();
+          if (!response.ok) {
+            output.append(el("p", { class: "warn", text: message(response.body) }));
+            return;
+          }
+          const hits = response.body.hits ?? [];
+          if (hits.length === 0) {
+            output.append(el("p", { class: "muted", text: t("empty") }));
+            return;
+          }
+          const list = el("ul");
+          for (const hit of hits) {
+            const open = el("button", { class: "quiet", type: "button", text: hit.jobId });
+            open.addEventListener("click", () => openJob(hit.jobId));
+            list.append(
+              el("li", {}, [
+                open,
+                document.createTextNode(` ${hit.file}:${hit.line} ${hit.text}`),
+              ]),
+            );
+          }
+          output.append(list);
+        });
+        return el("section", {}, [
+          el("h1", { text: t("search") }),
+          el("p", { class: "muted", text: "strings, endpoints, android.permission" }),
+          form,
+          output,
           footer(),
         ]);
       };
@@ -775,6 +1100,8 @@
         fresh: () => renderNew(),
         history: renderHistory,
         job: renderJob,
+        compare: renderCompare,
+        search: renderSearch,
         library: renderLibrary,
         settings: renderSettings,
         users: renderUsers,
@@ -787,6 +1114,8 @@
           ["home", "home"],
           ["fresh", "fresh"],
           ["history", "history"],
+          ["compare", "compare"],
+          ["search", "search"],
           ["library", "library"],
         ];
         if (me?.user?.role === "admin") {

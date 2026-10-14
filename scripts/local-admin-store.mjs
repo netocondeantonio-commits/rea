@@ -40,6 +40,10 @@ const ERRORS = {
     "That user cannot be removed.",
   ],
   target: ["Informe um caminho ou URL.", "Enter a path or URL."],
+  schedule: [
+    "O intervalo mínimo é 15 minutos.",
+    "The shortest interval is 15 minutes.",
+  ],
 };
 
 const reject = (key) => ({ error: ERRORS[key][0], error_en: ERRORS[key][1] });
@@ -274,14 +278,95 @@ const targetApi = (state, save) => ({
     await save();
     return { ok: true };
   },
+  patchTarget: async (id, input) => patchTarget(state, save, id, input),
 });
+
+const clampInt = (value, max) => {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > max) return 0;
+  return number;
+};
+
+const storedWebhook = (value) => {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 500) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+};
+
+const storedChat = (value) => {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return /^-?[0-9]{1,32}$/u.test(trimmed) ? trimmed : "";
+};
 
 const normalizeSettings = (value) => ({
   outputDir: typeof value.outputDir === "string" ? value.outputDir : "",
   language: value.language === "en" ? "en" : "pt-BR",
   theme: value.theme === "dark" ? "dark" : "light",
   engines: cleanEngines(value.engines),
+  webhookUrl: storedWebhook(value.webhookUrl),
+  telegramChatId: storedChat(value.telegramChatId),
+  cpuNice: clampInt(value.cpuNice, 19),
+  ramLimitMb: clampInt(value.ramLimitMb, 65536),
 });
+
+const applySchedule = (next, input) => {
+  if (input.everyMinutes === 0 || input.everyMinutes === null) {
+    delete next.everyMinutes;
+    delete next.nextRun;
+    return { ok: true };
+  }
+  if (input.everyMinutes === undefined) {
+    if (typeof input.nextRun === "string") next.nextRun = input.nextRun;
+    return { ok: true };
+  }
+  const minutes = Number(input.everyMinutes);
+  if (!Number.isInteger(minutes) || minutes < 15 || minutes > 10_080)
+    return reject("schedule");
+  next.everyMinutes = minutes;
+  next.nextRun =
+    typeof input.nextRun === "string"
+      ? input.nextRun
+      : new Date(Date.now() + minutes * 60_000).toISOString();
+  return { ok: true };
+};
+
+const patchTarget = async (state, save, id, input) => {
+  const current = state.targets.find((item) => item.id === id);
+  if (!current) return reject("missing");
+  const next = { ...current };
+  const scheduled = applySchedule(next, input);
+  if (scheduled.error) return scheduled;
+  if (typeof input.lastDigest === "string")
+    next.lastDigest = input.lastDigest.slice(0, 64);
+  state.targets = state.targets.map((item) => (item.id === id ? next : item));
+  await save();
+  return { target: next };
+};
+
+const applyAdminSettings = (next, input, previous) => {
+  if (typeof input.outputDir === "string" && !input.outputDir.includes("\0"))
+    next.outputDir = input.outputDir.trim().slice(0, 400);
+  if (input.engines && typeof input.engines === "object")
+    next.engines = cleanEngines({ ...previous.engines, ...input.engines });
+  if (typeof input.webhookUrl === "string")
+    next.webhookUrl =
+      input.webhookUrl.trim().length === 0
+        ? ""
+        : storedWebhook(input.webhookUrl) || previous.webhookUrl;
+  if (typeof input.telegramChatId === "string")
+    next.telegramChatId = storedChat(input.telegramChatId);
+  if (input.cpuNice !== undefined) next.cpuNice = clampInt(input.cpuNice, 19);
+  if (input.ramLimitMb !== undefined)
+    next.ramLimitMb = clampInt(input.ramLimitMb, 65536);
+};
 
 const settingsApi = (state, save) => ({
   readSettings: () => state.settings,
@@ -291,17 +376,7 @@ const settingsApi = (state, save) => ({
       next.language = input.language;
     if (input.theme === "dark" || input.theme === "light")
       next.theme = input.theme;
-    if (
-      role === "admin" &&
-      typeof input.outputDir === "string" &&
-      !input.outputDir.includes("\0")
-    )
-      next.outputDir = input.outputDir.trim().slice(0, 400);
-    if (role === "admin" && input.engines && typeof input.engines === "object")
-      next.engines = cleanEngines({
-        ...state.settings.engines,
-        ...input.engines,
-      });
+    if (role === "admin") applyAdminSettings(next, input, state.settings);
     state.settings = next;
     await save();
     return state.settings;

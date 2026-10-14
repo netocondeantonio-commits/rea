@@ -7,8 +7,10 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { loadEnvFile } from "./local-admin-auth.mjs";
 import { openAdmin } from "./local-admin-store.mjs";
+import { notifyJobFinished } from "./local-admin-schedule.mjs";
 import {
   createJob,
+  currentLimits,
   enqueueJob,
   loadHistory,
   mergedEnv,
@@ -142,6 +144,12 @@ const isAbort = (cause) =>
   cause?.name === "AbortError" || cause?.code === "ABORT_ERR";
 
 const runRea = async (args, timeoutMs, signal) => {
+  const nice = currentLimits().cpuNice;
+  const useNice = nice > 0 && (await commandExists("nice"));
+  const command = useNice ? "nice" : process.execPath;
+  const argv = useNice
+    ? ["-n", String(nice), process.execPath, reaScript, ...args, "--json"]
+    : [reaScript, ...args, "--json"];
   const child = {
     cwd: root,
     timeout: timeoutMs,
@@ -150,11 +158,7 @@ const runRea = async (args, timeoutMs, signal) => {
   };
   if (signal) child.signal = signal;
   try {
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      [reaScript, ...args, "--json"],
-      child,
-    );
+    const { stdout, stderr } = await execFileAsync(command, argv, child);
     return { ok: true, stdout, stderr };
   } catch (cause) {
     if (isAbort(cause))
@@ -400,6 +404,7 @@ if (options.help || (options.target === undefined && !options.serve)) {
   help();
   process.exit(options.help ? 0 : 2);
 }
+const admin = await openLocalAdmin(options);
 bindLocalAnalyzer({
   runRea,
   commandExists,
@@ -408,8 +413,9 @@ bindLocalAnalyzer({
   exists,
   parseJson,
   factsFrom,
+  integritySecret: () => admin.secret,
+  onFinished: (job) => notifyJobFinished(admin, job),
 });
-const admin = await openLocalAdmin(options);
 await mkdir(options.output, { recursive: true });
 const jobs = new Map();
 await loadHistory(options.output, jobs);
