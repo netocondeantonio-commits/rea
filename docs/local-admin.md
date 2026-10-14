@@ -80,7 +80,7 @@ The same loopback process, still with no model, can:
 
 - Diff two finished jobs: `hashes.sha256`, `strings.txt`, and OpenAPI paths. Added and removed lines are capped.
 - Repeat a saved target every N minutes (15 minimum) while the page process stays up. The timer stops when the process stops. A webhook and an audit row are written only when the manifest SHA-256 changes. The first run only stores the digest.
-- Queue with low, normal, and high priority. A running job is not preempted. `nice` 0–19 is applied to the child when the `nice` binary exists and the sandbox is off. Without the sandbox, a RAM number is only shown. With the Docker sandbox, `--memory` and `--cpus` are the cgroup.
+- Queue with low, normal, and high priority. A running job is not preempted. `nice` 0–19 is applied to the child when the `nice` binary exists and the sandbox is off. Without the sandbox, a RAM number is only shown. With `REA_SANDBOX=1`, the default mode is isolate (`unshare`, `taskset`, `prlimit`). `REA_SANDBOX_MODE=docker` uses `--memory` and `--cpus`.
 - Write `hashes.sha256` for the evidence files. When the local admin secret has at least 16 characters, `signature.txt` is an HMAC-SHA256 of that manifest. It is a local integrity tag, not a public code-signing certificate.
 - Show an observation checklist with green, amber, and red. Red is an engine step that failed. Routes, Android permission names, and `http://` URLs are copied from files already on disk. This is not an OWASP certificate and it does not mean the program is safe.
 - Search `.txt`, `.json`, and `.md` evidence for strings, routes, and `android.permission` names.
@@ -90,7 +90,7 @@ The same loopback process, still with no model, can:
 - Export and import engine configuration. Keys outside the engine list, including `PATH` and `LD_PRELOAD`, are dropped.
 - Run a fast mode for JavaScript and static sites. That mode does not call Ghidra or JADX. For an APK, a native file, or .NET it records a skip and does not call those engines.
 
-The Docker sandbox starts off. Turn it on with `REA_SANDBOX=1` or the admin setting. This repository does not download a `rea-sandbox:local` image; `deploy/Dockerfile.sandbox` shows how to build one. If the sandbox is on and `docker` is missing, the analysis does not run on the host. Frida stays presence only. Apktool is not a pipeline step.
+The sandbox starts off on this computer. Turn it on with `REA_SANDBOX=1` or the admin setting. When it is on, the default mode is isolate: no network, with `taskset` and `prlimit`. If `unshare`, `prlimit`, or `taskset` is missing, the analysis does not run on the host. `REA_SANDBOX_MODE=docker` uses the image described in `deploy/Dockerfile.sandbox`, with `--memory` and `--cpus`. The production image in `deploy/Dockerfile` turns isolate on and includes Ghidra, JADX, Rizin, Apktool, and Frida tools. The Frida step only lists devices. Apktool decodes the manifest and strings and does not emit smali.
 
 APK and binary uploads land in `output/uploads/<user>/`, with a size cap and a content check. API role `user` is stored as a non-admin user. An administrator sees every analysis. Another user gets 404 for someone else's analysis. `GET /api/health`, `GET /api/openapi.json`, and `GET /api/docs` describe the API. `REA_DEMO=1` allows only an upload, GitHub, or the pinned APK.
 

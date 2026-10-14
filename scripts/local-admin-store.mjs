@@ -18,6 +18,7 @@ export const ENGINE_KEYS = Object.freeze([
   "REA_OBJDUMP_COMMAND",
   "REA_GDB_COMMAND",
   "GHIDRA_MCP_BIN",
+  "REA_APKTOOL_COMMAND",
 ]);
 
 const USERNAME = /^[A-Za-z0-9._-]{1,32}$/u;

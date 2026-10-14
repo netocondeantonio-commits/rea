@@ -39,7 +39,7 @@ npm run analyze -- /caminho/do/alvo --no-serve --output /caminho/dos/relatorios
 ## O que colar
 
 - Diretório com `package.json`: análise estática de JavaScript. Se o pacote declara Electron, o REA segue o fluxo de aplicativo JavaScript que já existe.
-- Arquivo `.apk`, `.xapk` ou `.aab`: pacote Android, se `REA_JADX_MCP_JAR` apontar para o JAR `jadx-headless-mcp` 0.7.1.
+- Arquivo `.apk`, `.xapk` ou `.aab`: Apktool decodifica o manifesto e as strings, sem smali, quando `apktool` ou `REA_APKTOOL_COMMAND` existe. JADX roda se `REA_JADX_MCP_JAR` apontar para o JAR `jadx-headless-mcp` 0.7.1. O Frida, se estiver no PATH, só lista dispositivos: não anexa e não injeta.
 - Binário ELF, Mach-O ou PE nativo: `objdump` e Rizin, quando estiverem no `PATH`, e o Ghidra quando `GHIDRA_INSTALL_DIR` estiver definido.
 - Assembly .NET (PE com metadados CLI): inspeção gerenciada, sem motor nativo.
 - Diretório só com `index.html`: o relatório diz que a observação no navegador precisa de um Chrome com porta de depuração. Este comando não abre navegador.
@@ -56,7 +56,8 @@ Nenhuma chave de API é necessária.
 | --------------------- | --------------------------------------------------------------------------------------------------------- |
 | `GHIDRA_INSTALL_DIR`  | Visão nativa com Ghidra. Sem ela, o relatório ainda pode trazer `objdump` e Rizin.                        |
 | `JAVA_HOME`           | JDK completo usado pelo Ghidra e pelo JADX. O script não instala Java.                                    |
-| `REA_JADX_MCP_JAR`    | Caminho absoluto do JAR `jadx-headless-mcp` 0.7.1. Sem ele, um APK gera um relatório que explica a falta. |
+| `REA_JADX_MCP_JAR`    | Caminho absoluto do JAR `jadx-headless-mcp` 0.7.1. Sem ele, o APK ainda pode passar pelo Apktool.         |
+| `REA_APKTOOL_COMMAND` | Caminho absoluto do lançador do Apktool. Sem ele, o painel procura `apktool` no `PATH`.                   |
 | `REA_OBJDUMP_COMMAND` | Caminho absoluto do `objdump`, se não for o do `PATH`.                                                    |
 | `REA_RIZIN_COMMAND`   | Caminho absoluto do `rizin`, se não for o do `PATH`.                                                      |
 | `REA_ANALYZE_OUTPUT`  | Pasta dos relatórios, se os ajustes do painel não escolherem outra.                                       |
@@ -117,7 +118,7 @@ Estas funções rodam no mesmo processo local, sem modelo:
 
 - Comparar duas análises já feitas: hashes, `strings.txt` e rotas do OpenAPI. A lista de diferenças é limitada.
 - Repetir um alvo da biblioteca a cada N minutos (mínimo 15). O relógio existe só enquanto o painel está aberto. Se o SHA-256 do manifesto mudar, o painel grava a auditoria e, se houver webhook, avisa. A primeira execução só guarda o hash.
-- Fila com prioridade baixa, normal ou alta. Uma análise em andamento não é interrompida. `nice` de 0 a 19, quando o comando `nice` existe e o sandbox está desligado, vale para o processo filho. Sem sandbox, o número de RAM é só mostrado. Com sandbox Docker, `--memory` e `--cpus` são o cgroup.
+- Fila com prioridade baixa, normal ou alta. Uma análise em andamento não é interrompida. `nice` de 0 a 19, quando o comando `nice` existe e o sandbox está desligado, vale para o processo filho. Sem sandbox, o número de RAM é só mostrado. Com `REA_SANDBOX=1`, o padrão é isolate (`unshare`, `taskset`, `prlimit`). `REA_SANDBOX_MODE=docker` usa `--memory` e `--cpus`.
 - Cada análise ganha `hashes.sha256`. Se o segredo local tiver pelo menos 16 caracteres, `signature.txt` traz um HMAC desse manifesto. É uma etiqueta de integridade deste computador, não um certificado público.
 - Lista no estilo de um checklist, com verde, âmbar e vermelho. Vermelho é etapa do motor que falhou. O texto copia rotas, permissões Android e URLs `http://` que já estavam nos arquivos. Não é um certificado OWASP e não significa que o programa é seguro.
 - Busca em textos `.txt`, `.json` e `.md` das análises: strings, rotas e nomes `android.permission`.
@@ -127,7 +128,7 @@ Estas funções rodam no mesmo processo local, sem modelo:
 - Exportar e importar a configuração dos motores. Chaves fora da lista (`PATH`, `LD_PRELOAD` e qualquer outra) são descartadas.
 - Modo rápido para JavaScript e site estático: não chama Ghidra nem JADX. Em APK, nativo ou .NET o modo recusa e não chama esses motores.
 
-O sandbox Docker começa desligado. Ligue com `REA_SANDBOX=1` ou no ajuste do administrador. A imagem `rea-sandbox:local` não é baixada por este repositório; o arquivo `deploy/Dockerfile.sandbox` mostra como montá-la. Se o sandbox está ligado e o comando `docker` não existe, a análise não roda no host. Frida continua só como presença. Apktool não é uma etapa do pipeline.
+O sandbox começa desligado neste computador. Ligue com `REA_SANDBOX=1` ou no ajuste do administrador. O modo padrão, quando ligado, é isolate: sem rede, com `taskset` e `prlimit`. Se `unshare`, `prlimit` ou `taskset` faltarem, a análise não roda no host. `REA_SANDBOX_MODE=docker` usa a imagem descrita em `deploy/Dockerfile.sandbox`, com `--memory` e `--cpus`. A imagem de produção em `deploy/Dockerfile` liga o isolate e já traz Ghidra, JADX, Rizin, Apktool e as ferramentas do Frida. O passo do Frida só lista dispositivos.
 
 Upload de APK e binário fica em `output/uploads/<usuário>/`, com teto de tamanho e conferência do tipo pelo conteúdo. O papel `user` na API é gravado como usuário (operador). Um administrador vê todas as análises. Outro usuário recebe 404 na análise de outra pessoa. `GET /api/health`, `GET /api/openapi.json` e `GET /api/docs` descrevem a API. O modo `REA_DEMO=1` só aceita upload, GitHub ou o APK fixado.
 

@@ -4,6 +4,8 @@ export const clampMb: (value: unknown) => number;
 
 export const clampCpu: (value: unknown) => number;
 
+export const sandboxModeOf: () => "docker" | "isolate";
+
 export const sandboxFields: (
   value: {
     sandbox?: boolean;
@@ -17,28 +19,24 @@ export const applySandboxSettings: (
   input: { sandbox?: boolean; sandboxImage?: string; sandboxCpus?: number },
 ) => void;
 
+type SandboxConfig = {
+  enabled: boolean;
+  mode: "docker" | "isolate";
+  image: string;
+  memoryMb: number;
+  cpus: number;
+};
+
 export const sandboxConfigFrom: (settings?: {
   sandbox?: boolean;
   sandboxImage?: string;
   ramLimitMb?: number;
   sandboxCpus?: number;
-}) => { enabled: boolean; image: string; memoryMb: number; cpus: number };
+}) => SandboxConfig;
 
-export const setSandboxConfig: (
-  reader: () => {
-    enabled: boolean;
-    image: string;
-    memoryMb: number;
-    cpus: number;
-  },
-) => void;
+export const setSandboxConfig: (reader: () => SandboxConfig) => void;
 
-export const readSandboxConfig: () => {
-  enabled: boolean;
-  image: string;
-  memoryMb: number;
-  cpus: number;
-};
+export const readSandboxConfig: () => SandboxConfig;
 
 export const setSandboxJob: (
   job: { directory?: string; resolved?: string } | undefined,
@@ -57,18 +55,25 @@ export const sandboxArgs: (input: {
   engines?: Record<string, string>;
 }) => string[];
 
+export const isolateArgs: (input: {
+  memoryMb?: number;
+  cpus?: number;
+  argv?: string[];
+}) => string[];
+
 export const prepareSandbox: (
   input: {
     repo?: string;
     jobDir?: string;
     targetPath?: string;
     argv?: string[];
-    engines?: Record<string, string>;
+    memoryMb?: number;
+    engines?: Record<string, string | undefined>;
   },
   exists: (command: string) => Promise<boolean>,
 ) => Promise<
   | { enabled: false }
-  | { enabled: true; blocked: true }
+  | { enabled: true; blocked: true; reason: string }
   | {
       enabled: true;
       command: string;

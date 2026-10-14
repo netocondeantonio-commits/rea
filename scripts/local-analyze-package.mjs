@@ -176,6 +176,10 @@ const loadCompanions = async (commandExists) => ({
     process.env.REA_OBJDUMP_COMMAND ?? "objdump",
   ),
   frida: await exists(commandExists, "frida"),
+  apktool: await exists(
+    commandExists,
+    process.env.REA_APKTOOL_COMMAND ?? "apktool",
+  ),
   ghidraMcp: await exists(
     commandExists,
     process.env.GHIDRA_MCP_BIN ?? "ghidra-mcp",

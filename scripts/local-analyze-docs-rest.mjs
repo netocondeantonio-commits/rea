@@ -57,6 +57,20 @@ const engineBlocks = (facts, lang) => {
       ),
     ],
     [
+      "Apktool",
+      stepSentence(
+        stepOf(facts, "apktool-resources") ??
+          stepOf(facts, "apktool-client") ??
+          stepOf(facts, "apktool-missing"),
+        lang,
+        phrase(
+          lang,
+          `Não houve passo do Apktool. O comando está ${yesNo(facts.companions.apktool, lang)}. Ele decodifica manifesto e strings, sem smali.`,
+          `There was no Apktool step. The command is ${yesNo(facts.companions.apktool, lang)}. It decodes the manifest and strings, without smali.`,
+        ),
+      ),
+    ],
+    [
       "JADX",
       stepSentence(
         android,
@@ -110,11 +124,19 @@ const engineBlocks = (facts, lang) => {
 const companionBlocks = (facts, lang) => [
   [
     "Frida",
-    phrase(
+    `${stepSentence(
+      stepOf(facts, "frida-devices"),
       lang,
-      `O Frida observa um processo em execução. Este caminho não inicia o alvo e não se anexa a nada. Frida no PATH: ${yesNo(facts.companions.frida, lang)}.`,
-      `Frida watches a running process. This path does not start the target and does not attach to anything. Frida on PATH: ${yesNo(facts.companions.frida, lang)}.`,
-    ),
+      phrase(
+        lang,
+        `Não houve lista de dispositivos. Frida no PATH: ${yesNo(facts.companions.frida, lang)}.`,
+        `There was no device list. Frida on PATH: ${yesNo(facts.companions.frida, lang)}.`,
+      ),
+    )} ${phrase(
+      lang,
+      "Esse passo só lista dispositivos. Não anexa e não injeta.",
+      "That step only lists devices. It does not attach and does not inject.",
+    )}`,
   ],
   [
     "GhidraMCP",

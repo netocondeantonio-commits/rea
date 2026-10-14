@@ -3,10 +3,11 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    image: rea-admin:local
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:4174:4174"
+    expose:
+      - "4174"
     volumes:
       - rea-data:/data
     environment:
@@ -14,8 +15,13 @@ services:
       REA_ANALYZE_PORT: "4174"
       REA_ANALYZE_OUTPUT: /data/analyses
       REA_ADMIN_DIR: /data/admin
-    mem_limit: 2g
-    cpus: 2
+      REA_SANDBOX: "1"
+      REA_SANDBOX_MODE: isolate
+      REA_SANDBOX_MEMORY_MB: "2048"
+      REA_TRUST_PROXY: "1"
+      REA_COOKIE_SECURE: "1"
+    mem_limit: 6g
+    cpus: "2"
     healthcheck:
       test:
         [
@@ -27,10 +33,13 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    # Traefik owns ports 80 and 443. These labels are comments so Compose does not publish them.
-    # labels:
-    #   - traefik.enable=true
-    #   - traefik.http.routers.rea.rule=Host(`rea.example.test`)
-    #   - traefik.http.services.rea.loadbalancer.server.port=4174
+      start_period: 20s
+    labels:
+      - traefik.enable=${REA_TRAEFIK_ENABLE:-true}
+      - traefik.http.routers.rea.rule=Host(`${REA_TRAEFIK_HOST:-rea-187-77-225-72.sslip.io}`)
+      - traefik.http.routers.rea.entrypoints=${REA_TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.rea.tls=true
+      - traefik.http.routers.rea.tls.certresolver=${REA_TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.rea.loadbalancer.server.port=${REA_ANALYZE_PORT:-4174}
 volumes:
   rea-data:

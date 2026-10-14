@@ -38,15 +38,15 @@ export const pipelineMap = () => ({
     },
     {
       id: "frida",
-      runs: false,
-      note_pt: "Só presença. Não é executado.",
-      note_en: "Presence only. It is not executed.",
+      runs: true,
+      note_pt: "Lista dispositivos. Não anexa e não injeta.",
+      note_en: "Lists devices. It does not attach and does not inject.",
     },
     {
       id: "apktool",
-      runs: false,
-      note_pt: "O chamador instala. Não é uma etapa deste pipeline.",
-      note_en: "Caller-supplied. Not a step in this pipeline.",
+      runs: true,
+      note_pt: "Decodifica o manifesto e as strings. Não gera smali.",
+      note_en: "Decodes the manifest and strings. It does not emit smali.",
     },
     {
       id: "gdb",
@@ -124,11 +124,11 @@ const docsPage = () => `<!doctype html>
 <p>POST <code>/api/login</code> devolve um cookie <code>rea_session</code> e um JWT HS256 no campo <code>token</code>. O papel <code>user</code> é gravado como operador. Um administrador vê todas as análises. Outro usuário vê só as próprias. Um pedido a análise alheia responde 404.</p>
 <p>POST <code>/api/login</code> returns an <code>rea_session</code> cookie and an HS256 JWT in <code>token</code>. Role <code>user</code> is stored as operator. An admin sees every analysis. Another user sees only their own. Another user's analysis returns 404.</p>
 <h2>Motores</h2>
-<p>O pipeline chama Ghidra, JADX, Rizin e objdump quando estão configurados. Frida só aparece como presença e não é executado. Apktool não é uma etapa: quem analisa o instala. O modo rápido pula Ghidra e JADX em JavaScript e site estático.</p>
-<p>The pipeline calls Ghidra, JADX, Rizin, and objdump when they are configured. Frida is presence only and is not executed. Apktool is not a step; the caller installs it. Fast mode skips Ghidra and JADX for JavaScript and static sites.</p>
+<p>O pipeline chama Ghidra, JADX, Rizin, objdump e Apktool quando estão configurados. O Apktool decodifica manifesto e strings, sem smali. O Frida só lista dispositivos: não anexa e não injeta. O modo rápido pula esses motores em JavaScript e site estático.</p>
+<p>The pipeline calls Ghidra, JADX, Rizin, objdump, and Apktool when they are configured. Apktool decodes the manifest and strings, without smali. Frida only lists devices: it does not attach and does not inject. Fast mode skips those engines for JavaScript and static sites.</p>
 <h2>Sandbox e proxy</h2>
-<p>O sandbox Docker começa desligado. Ligado, ele usa <code>--memory</code> e <code>--cpus</code>. Se <code>docker</code> faltar, o alvo não roda no host. A porta padrão é 4174 em 127.0.0.1. As portas 80 e 443 ficam com o proxy.</p>
-<p>The Docker sandbox starts off. When on, it uses <code>--memory</code> and <code>--cpus</code>. If <code>docker</code> is missing, the target does not run on the host. The default port is 4174 on 127.0.0.1. Ports 80 and 443 stay with the proxy.</p>
+<p>O sandbox começa desligado no computador local. <code>REA_SANDBOX=1</code> liga o modo isolate (sem rede, com taskset e prlimit). <code>REA_SANDBOX_MODE=docker</code> usa <code>--memory</code> e <code>--cpus</code>. Se a ferramenta escolhida faltar, o alvo não roda no host. A porta padrão é 4174. As portas 80 e 443 ficam com o proxy.</p>
+<p>The sandbox starts off on a local computer. <code>REA_SANDBOX=1</code> turns on isolate mode (no network, with taskset and prlimit). <code>REA_SANDBOX_MODE=docker</code> uses <code>--memory</code> and <code>--cpus</code>. If the chosen tool is missing, the target does not run on the host. The default port is 4174. Ports 80 and 443 stay with the proxy.</p>
 <p>Licenças de IDA, Hopper, JEB e das peças GPL/LGPL continuam valendo. Isto não é parecer jurídico.</p>
 <p>IDA, Hopper, JEB, and GPL/LGPL terms still apply. This is not legal advice.</p>
 </body></html>`;

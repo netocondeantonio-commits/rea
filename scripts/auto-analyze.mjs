@@ -6,6 +6,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { bindAddress } from "./local-admin-access.mjs";
+import { createPlan } from "./local-analyze-plan.mjs";
 import { loadEnvFile } from "./local-admin-auth.mjs";
 import {
   prepareSandbox,
@@ -168,6 +169,7 @@ const childCommand = async (args) => {
   if (prepared.blocked)
     return {
       blocked: true,
+      reason: prepared.reason,
       command: process.execPath,
       argv: [],
       env: {},
@@ -189,13 +191,18 @@ const childCommand = async (args) => {
   };
 };
 
+const sandboxBlocked = (reason) =>
+  reason === "docker"
+    ? "Sandbox pedido e o Docker não está disponível."
+    : "Sandbox pedido e o isolamento (unshare, prlimit ou taskset) não está disponível.";
+
 const runRea = async (args, timeoutMs, signal) => {
   const launched = await childCommand(args);
   if (launched.blocked)
     return {
       ok: false,
       stdout: "",
-      stderr: "Sandbox pedido e o Docker não está disponível.",
+      stderr: sandboxBlocked(launched.reason),
     };
   const child = {
     cwd: root,
@@ -305,111 +312,7 @@ const factsFrom = (value) => {
   return facts.slice(0, 8);
 };
 
-const planSteps = async (kind, path, signal) => {
-  if (kind === "javascript")
-    return [
-      {
-        id: "javascript",
-        title: "Aplicativo JavaScript",
-        args: ["analyze-javascript-application", path],
-        timeoutMs: 180_000,
-      },
-    ];
-  if (kind === "android") {
-    if ((mergedEnv().REA_JADX_MCP_JAR ?? "").length === 0)
-      return [
-        {
-          id: "android-missing",
-          title: "APK sem JADX",
-          skip: "Defina REA_JADX_MCP_JAR para o JAR jadx-headless-mcp 0.7.1. O painel não baixa esse arquivo.",
-        },
-      ];
-    return [
-      {
-        id: "android",
-        title: "Pacote Android",
-        args: ["inspect-android-package", path],
-        timeoutMs: 180_000,
-      },
-    ];
-  }
-  if (kind === "website")
-    return [
-      {
-        id: "website",
-        title: "Site estático",
-        skip: "Há um index.html e nenhum package.json. Observar a página no navegador precisa de um Chrome com porta de depuração. Este caminho não abre navegador.",
-      },
-    ];
-  if (kind === "pe") {
-    const managed = await runRea(
-      ["inspect-managed-artifact", path],
-      60_000,
-      signal,
-    );
-    if (managed.ok)
-      return [
-        {
-          id: "dotnet",
-          title: "Assembly .NET",
-          precomputed: managed,
-          args: ["inspect-managed-artifact", path],
-        },
-      ];
-    return planNative(path, [
-      "O arquivo PE não foi aceito como assembly .NET. Seguindo com inspeção nativa.",
-    ]);
-  }
-  if (kind === "native") return planNative(path, []);
-  return [
-    {
-      id: "unknown",
-      title: "Tipo não reconhecido",
-      skip: "Use um diretório com package.json, um APK, um binário nativo, um assembly .NET ou um repositório GitHub que contenha um desses alvos.",
-    },
-  ];
-};
-
-const planNative = async (path, notes) => {
-  const steps = [];
-  for (const note of notes)
-    steps.push({ id: "note", title: "Nota", skip: note });
-  if (await commandExists(mergedEnv().REA_OBJDUMP_COMMAND ?? "objdump"))
-    steps.push({
-      id: "objdump",
-      title: "objdump",
-      args: ["inspect-with-objdump", path, "file_headers"],
-      timeoutMs: 60_000,
-    });
-  if (await commandExists(mergedEnv().REA_RIZIN_COMMAND ?? "rizin")) {
-    steps.push({
-      id: "rizin",
-      title: "Rizin",
-      args: ["execute-rizin-command", path, "iI"],
-      timeoutMs: 60_000,
-    });
-    steps.push({
-      id: "rizin-strings",
-      title: "Rizin strings",
-      args: ["execute-rizin-command", path, "iz"],
-      timeoutMs: 60_000,
-    });
-  }
-  if ((mergedEnv().GHIDRA_INSTALL_DIR ?? "").length > 0)
-    steps.push({
-      id: "ghidra",
-      title: "Ghidra",
-      args: ["analyze", path, "--provider", "ghidra"],
-      timeoutMs: 300_000,
-    });
-  else
-    steps.push({
-      id: "ghidra-missing",
-      title: "Ghidra",
-      skip: "GHIDRA_INSTALL_DIR não está definido. A visão estática acima não substitui a descompilação.",
-    });
-  return steps;
-};
+const { planSteps } = createPlan({ mergedEnv, commandExists, runRea });
 
 const loadAdminEnv = async () => {
   if (process.env.REA_ADMIN_ENV) await loadEnvFile(process.env.REA_ADMIN_ENV);

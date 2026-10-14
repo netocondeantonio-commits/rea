@@ -1,6 +1,6 @@
 import { mergedEnv } from "./local-analyze-jobs.mjs";
 
-/** Home cards. Doctor is cached. Frida is only checked, never started. */
+/** Home cards. Doctor is cached. Frida lists devices and is not attached. */
 
 let cache = { at: 0, value: undefined };
 
@@ -36,11 +36,13 @@ export const engineStatus = async ({ runRea, commandExists }) => {
   }
   const exists = commandExists ?? (async () => false);
   const rizin = env.REA_RIZIN_COMMAND || "rizin";
+  const apktool = env.REA_APKTOOL_COMMAND || "apktool";
   return {
     ghidra: flag((env.GHIDRA_INSTALL_DIR ?? "").length > 0, "path"),
     jadx: flag((env.REA_JADX_MCP_JAR ?? "").length > 0, "path"),
     rizin: flag(await exists(rizin), "command"),
-    frida: flag(await exists("frida"), "not-run"),
+    apktool: flag(await exists(apktool), "decode"),
+    frida: flag(await exists("frida"), "inspect"),
     doctor: cache.value,
   };
 };

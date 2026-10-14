@@ -10,7 +10,14 @@ import {
 } from "../../../scripts/local-admin-access.mjs";
 import { readJwt, signJwt } from "../../../scripts/local-admin-auth.mjs";
 import { webhookRequest } from "../../../scripts/local-admin-report-export.mjs";
-import { sandboxArgs } from "../../../scripts/local-admin-sandbox.mjs";
+import {
+  isolateArgs,
+  prepareSandbox,
+  sandboxArgs,
+  sandboxConfigFrom,
+  setSandboxConfig,
+} from "../../../scripts/local-admin-sandbox.mjs";
+import { createPlan } from "../../../scripts/local-analyze-plan.mjs";
 import { openAdmin } from "../../../scripts/local-admin-store.mjs";
 import { acceptedUpload } from "../../../scripts/local-admin-upload.mjs";
 import { startLocalDashboard } from "../../../scripts/local-analyze-http.mjs";
@@ -93,6 +100,93 @@ it("signs a JWT and checks upload magic and sandbox cgroup flags", () => {
   expect(args).toContain("--network");
   expect(args).toContain("none");
   expect(args).toContain("512m");
+  const isolated = isolateArgs({
+    memoryMb: 512,
+    cpus: 2,
+    argv: ["node", "scripts/rea.mjs", "doctor"],
+  });
+  expect(isolated.slice(0, 3)).toEqual(["--user", "--map-root-user", "--net"]);
+  expect(isolated).toContain("taskset");
+  expect(isolated).toContain("prlimit");
+  expect(isolated.some((part) => part.startsWith("--as="))).toBe(true);
+  expect(isolated.join(" ")).not.toContain("instrument-with-frida");
+});
+
+it("plans apktool and fails closed when isolate tools are missing", async () => {
+  const previous = {
+    sandbox: process.env.REA_SANDBOX,
+    mode: process.env.REA_SANDBOX_MODE,
+    memory: process.env.REA_SANDBOX_MEMORY_MB,
+  };
+  const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+  try {
+    const { planSteps } = createPlan({
+      mergedEnv: () => ({
+        REA_APKTOOL_COMMAND: "/usr/local/bin/apktool",
+        REA_JADX_MCP_JAR: "/opt/jadx.jar",
+      }),
+      commandExists: async (command) =>
+        command === "/usr/local/bin/apktool" || command === "frida",
+      runRea: async () => ({ ok: false }),
+    });
+    const steps = await planSteps("android", "/tmp/sample.apk", undefined);
+    expect(steps.map((item) => item.id)).toEqual([
+      "apktool-client",
+      "apktool-resources",
+      "android",
+      "frida-devices",
+    ]);
+    const joined = steps.flatMap((item) => item.args ?? []).join(" ");
+    expect(joined).toContain("decode-android-resources");
+    expect(joined).not.toContain("instrument-with-frida");
+    expect(joined).not.toContain("list-frida-processes");
+    const withoutJadx = createPlan({
+      mergedEnv: () => ({ REA_APKTOOL_COMMAND: "/usr/local/bin/apktool" }),
+      commandExists: async (command) => command === "/usr/local/bin/apktool",
+      runRea: async () => ({ ok: false }),
+    });
+    const fallback = await withoutJadx.planSteps(
+      "android",
+      "/tmp/sample.apk",
+      undefined,
+    );
+    expect(fallback.map((item) => item.id)).toContain("apktool-resources");
+    expect(fallback.map((item) => item.id)).toContain("android-missing");
+    process.env.REA_SANDBOX = "1";
+    delete process.env.REA_SANDBOX_MODE;
+    process.env.REA_SANDBOX_MEMORY_MB = "2048";
+    setSandboxConfig(() => sandboxConfigFrom({ ramLimitMb: 0 }));
+    expect(sandboxConfigFrom({ ramLimitMb: 0 }).mode).toBe("isolate");
+    expect(sandboxConfigFrom({ ramLimitMb: 0 }).memoryMb).toBe(2048);
+    const blocked = await prepareSandbox(
+      { jobDir: "/tmp/rea-job", argv: ["node", "rea.mjs"], engines: {} },
+      async () => false,
+    );
+    expect(blocked).toEqual({
+      enabled: true,
+      blocked: true,
+      reason: "unshare,prlimit,taskset",
+    });
+    process.env.REA_SANDBOX_MODE = "docker";
+    setSandboxConfig(() => sandboxConfigFrom(undefined));
+    const dockerBlocked = await prepareSandbox(
+      { jobDir: "/tmp/rea-job", argv: ["node", "rea.mjs"], engines: {} },
+      async () => false,
+    );
+    expect(dockerBlocked).toEqual({
+      enabled: true,
+      blocked: true,
+      reason: "docker",
+    });
+  } finally {
+    restore("REA_SANDBOX", previous.sandbox);
+    restore("REA_SANDBOX_MODE", previous.mode);
+    restore("REA_SANDBOX_MEMORY_MB", previous.memory);
+    setSandboxConfig(() => sandboxConfigFrom(undefined));
+  }
 });
 
 it("hides another user's job and accepts a checked upload", async () => {
