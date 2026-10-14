@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rea": {
+      "command": "node",
+      "args": ["scripts/cursor-mcp-launch.mjs", "rea"]
+    },
+    "ghidra": {
+      "command": "node",
+      "args": ["scripts/cursor-mcp-launch.mjs", "ghidra-mcp"]
+    }
+  }
+}

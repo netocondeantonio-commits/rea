@@ -11,6 +11,7 @@
     "scripts/verify/termux/browser.mjs",
     "scripts/verify-real-ghidra-noreturn.mjs",
     "scripts/install-free-analysis-engines.mjs",
+    "scripts/cursor-mcp-launch.mjs",
     "scripts/run-exact-tests.mjs",
     "tests/processOwnershipRunner.ts"
   ],

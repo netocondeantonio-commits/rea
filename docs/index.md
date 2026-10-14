@@ -61,7 +61,8 @@ For runtime instrumentation, see the [Frida guide](./frida-instrumentation.md).
 
 For a source checkout inside Cursor, [Cursor local setup](cursor-local-setup.md)
 explains how to install the free engines doctor can check and what the owner
-still supplies for Hopper and IDA.
+still supplies for Hopper and IDA. The mapped complementary projects are listed
+in [Complementary reverse-engineering tools](awesome-ai-reverse-engineering.md).
 
 For development, use [testing](testing.md), [client verification](client-verification.md),
 [tool design](tool-design.md), and [releasing](releasing.md).

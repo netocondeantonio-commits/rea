@@ -1,0 +1,8 @@
+{
+  "command": "python",
+  "args": [
+    "/absolute/path/to/ida-pro-mcp/src/ida_pro_mcp/server.py",
+    "--ida-rpc",
+    "http://127.0.0.1:13337"
+  ]
+}
