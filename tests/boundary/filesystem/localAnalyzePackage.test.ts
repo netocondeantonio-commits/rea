@@ -18,7 +18,7 @@ interface PackageJob {
     ok?: boolean;
     facts?: readonly string[];
   }[];
-  events: unknown[];
+  events: { message: string }[];
   package_slug?: string;
   artifacts?: readonly { href?: string }[];
 }
