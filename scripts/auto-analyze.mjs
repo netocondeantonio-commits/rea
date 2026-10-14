@@ -1,0 +1,526 @@
+import { execFile } from "node:child_process";
+import { constants } from "node:fs";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, extname, join, resolve } from "node:path";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
+import { startLocalDashboard } from "./local-analyze-http.mjs";
+
+/**
+ * Local operator helper. It shells out to the existing REA CLI, writes a
+ * report, and can serve a loopback page. It does not change CLI or MCP
+ * behavior and it does not call a model.
+ */
+
+const execFileAsync = promisify(execFile);
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const reaScript = join(root, "scripts", "rea.mjs");
+const dashboardPath = join(root, "scripts", "local-analyze-dashboard.html");
+const githubUrl =
+  /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/u;
+
+const help = () => {
+  process.stderr.write(
+    `Uso:
+  npm run analyze -- --serve
+  npm run analyze -- <caminho-ou-url-github>
+  npm run analyze -- <caminho> --no-serve
+
+Opções: --serve  --no-serve  --port <n>  --output <dir>
+O padrão escuta só em 127.0.0.1. Sem --no-serve, o processo fica no painel.
+`,
+  );
+};
+
+const parseArgs = (argv) => {
+  let serve = false;
+  let noServe = false;
+  let port = Number(process.env.REA_ANALYZE_PORT ?? 4174);
+  let output =
+    process.env.REA_ANALYZE_OUTPUT ??
+    join(homedir(), ".local", "share", "rea", "analyses");
+  const positionals = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") return { help: true };
+    if (argument === "--serve") serve = true;
+    else if (argument === "--no-serve") noServe = true;
+    else if (argument === "--port") port = Number(argv[(index += 1)]);
+    else if (argument === "--output")
+      output = resolve(argv[(index += 1)] ?? "");
+    else if (argument.startsWith("-"))
+      throw new Error(`Opção desconhecida: ${argument}`);
+    else positionals.push(argument);
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error("Porta inválida.");
+  if (positionals.length > 1) throw new Error("Informe um único alvo.");
+  return {
+    help: false,
+    serve: serve || (positionals.length === 1 && !noServe),
+    noServe,
+    port,
+    output: resolve(output),
+    target: positionals[0],
+  };
+};
+
+const exists = async (path) => {
+  try {
+    await access(path, constants.R_OK);
+    return true;
+  } catch (cause) {
+    if (cause?.code === "ENOENT") return false;
+    throw cause;
+  }
+};
+
+const commandExists = async (command) => {
+  if (command.includes("/")) return exists(command);
+  const path = process.env.PATH ?? "";
+  for (const directory of path.split(":")) {
+    if (directory.length === 0) continue;
+    if (await exists(join(directory, command))) return true;
+  }
+  return false;
+};
+
+const readMagic = async (path) => {
+  const handle = await readFile(path);
+  return handle.subarray(0, 4);
+};
+
+const detectFile = async (path) => {
+  const extension = extname(path).toLowerCase();
+  if ([".apk", ".xapk", ".aab"].includes(extension)) return "android";
+  if (extension === ".asar") return "javascript";
+  if (extension === ".dll" || extension === ".exe") return "pe";
+  const magic = await readMagic(path);
+  if (magic[0] === 0x7f && magic.toString("utf8", 1, 4) === "ELF")
+    return "native";
+  if (magic[0] === 0x4d && magic[1] === 0x5a) return "pe";
+  if (
+    magic.toString("hex") === "cffaedfe" ||
+    magic.toString("hex") === "cefaedfe" ||
+    magic.toString("hex") === "feedface" ||
+    magic.toString("hex") === "feedfacf"
+  )
+    return "native";
+  return "unknown";
+};
+
+const detectDirectory = async (path) => {
+  if (await exists(join(path, "package.json"))) return "javascript";
+  if (await exists(join(path, "index.html"))) return "website";
+  return "unknown";
+};
+
+const detectTarget = async (path) => {
+  const info = await stat(path);
+  if (info.isDirectory()) return detectDirectory(path);
+  if (info.isFile()) return detectFile(path);
+  return "unknown";
+};
+
+const runRea = async (args, timeoutMs) => {
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [reaScript, ...args, "--json"],
+      {
+        cwd: root,
+        timeout: timeoutMs,
+        maxBuffer: 64 * 1024 * 1024,
+        env: process.env,
+      },
+    );
+    return { ok: true, stdout, stderr };
+  } catch (cause) {
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    const stdout = typeof error.stdout === "string" ? error.stdout : "";
+    const stderr = typeof error.stderr === "string" ? error.stderr : "";
+    return {
+      ok: false,
+      stdout,
+      stderr: stderr.length > 0 ? stderr : error.message,
+    };
+  }
+};
+
+const parseJson = (text) => {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return undefined;
+  }
+};
+
+const clip = (value, max = 1200) => {
+  const text = String(value);
+  return text.length > max ? `${text.slice(0, max)}\n…` : text;
+};
+
+const stripAnsi = (text) => {
+  let result = "";
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\u001b" && text[index + 1] === "[") {
+      const end = text.indexOf("m", index);
+      if (end !== -1) {
+        index = end;
+        continue;
+      }
+    }
+    result += text[index];
+  }
+  return result;
+};
+
+const subjectFacts = (subject) => {
+  if (subject === null || typeof subject !== "object") return [];
+  const facts = [];
+  if (typeof subject.name === "string") facts.push(`nome: ${subject.name}`);
+  if (typeof subject.format === "string")
+    facts.push(`formato: ${subject.format}`);
+  if (typeof subject.architecture === "string")
+    facts.push(`arquitetura: ${subject.architecture}`);
+  return facts;
+};
+
+const normalizedFacts = (normalized) => {
+  if (typeof normalized === "string") return [clip(normalized, 500)];
+  if (normalized === null || typeof normalized !== "object") return [];
+  const facts = [];
+  for (const key of [
+    "package_name",
+    "version_name",
+    "version_code",
+    "class_count",
+    "min_sdk",
+    "target_sdk",
+  ]) {
+    const field = normalized[key];
+    if (typeof field === "string" || typeof field === "number")
+      facts.push(`${key}: ${field}`);
+  }
+  const nodes = normalized.graph?.nodes;
+  if (Array.isArray(nodes)) facts.push(`nós do grafo: ${nodes.length}`);
+  return facts;
+};
+
+const factsFrom = (value) => {
+  if (value === undefined || value === null || typeof value !== "object")
+    return [];
+  const evidence =
+    "evidence" in value && value.evidence !== null ? value.evidence : value;
+  if (evidence === null || typeof evidence !== "object") return [];
+  const facts = [
+    ...subjectFacts(evidence.subject),
+    ...normalizedFacts(evidence.normalized_result),
+  ];
+  if (Array.isArray(evidence.limitations))
+    facts.push(`limitações registradas: ${evidence.limitations.length}`);
+  const stdout = evidence.raw_result?.stdout;
+  if (typeof stdout === "string" && facts.length < 4)
+    facts.push(clip(stripAnsi(stdout), 500));
+  return facts.slice(0, 8);
+};
+
+const escapeHtml = (value) =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const planSteps = async (kind, path) => {
+  if (kind === "javascript")
+    return [
+      {
+        id: "javascript",
+        title: "Aplicativo JavaScript",
+        args: ["analyze-javascript-application", path],
+        timeoutMs: 180_000,
+      },
+    ];
+  if (kind === "android") {
+    if ((process.env.REA_JADX_MCP_JAR ?? "").length === 0)
+      return [
+        {
+          id: "android-missing",
+          title: "APK sem JADX",
+          skip: "Defina REA_JADX_MCP_JAR para o JAR jadx-headless-mcp 0.7.1. O painel não baixa esse arquivo.",
+        },
+      ];
+    return [
+      {
+        id: "android",
+        title: "Pacote Android",
+        args: ["inspect-android-package", path],
+        timeoutMs: 180_000,
+      },
+    ];
+  }
+  if (kind === "website")
+    return [
+      {
+        id: "website",
+        title: "Site estático",
+        skip: "Há um index.html e nenhum package.json. Observar a página no navegador precisa de um Chrome com porta de depuração. Este caminho não abre navegador.",
+      },
+    ];
+  if (kind === "pe") {
+    const managed = await runRea(["inspect-managed-artifact", path], 60_000);
+    if (managed.ok)
+      return [
+        {
+          id: "dotnet",
+          title: "Assembly .NET",
+          precomputed: managed,
+          args: ["inspect-managed-artifact", path],
+        },
+      ];
+    return planNative(path, [
+      "O arquivo PE não foi aceito como assembly .NET. Seguindo com inspeção nativa.",
+    ]);
+  }
+  if (kind === "native") return planNative(path, []);
+  return [
+    {
+      id: "unknown",
+      title: "Tipo não reconhecido",
+      skip: "Use um diretório com package.json, um APK, um binário nativo, um assembly .NET ou um repositório GitHub que contenha um desses alvos.",
+    },
+  ];
+};
+
+const planNative = async (path, notes) => {
+  const steps = [];
+  for (const note of notes)
+    steps.push({ id: "note", title: "Nota", skip: note });
+  if (await commandExists(process.env.REA_OBJDUMP_COMMAND ?? "objdump"))
+    steps.push({
+      id: "objdump",
+      title: "objdump",
+      args: ["inspect-with-objdump", path, "file_headers"],
+      timeoutMs: 60_000,
+    });
+  if (await commandExists(process.env.REA_RIZIN_COMMAND ?? "rizin"))
+    steps.push({
+      id: "rizin",
+      title: "Rizin",
+      args: ["execute-rizin-command", path, "iI"],
+      timeoutMs: 60_000,
+    });
+  if ((process.env.GHIDRA_INSTALL_DIR ?? "").length > 0)
+    steps.push({
+      id: "ghidra",
+      title: "Ghidra",
+      args: ["analyze", path, "--provider", "ghidra"],
+      timeoutMs: 300_000,
+    });
+  else
+    steps.push({
+      id: "ghidra-missing",
+      title: "Ghidra",
+      skip: "GHIDRA_INSTALL_DIR não está definido. A visão estática acima não substitui a descompilação.",
+    });
+  return steps;
+};
+
+const writeReport = async (job) => {
+  const lines = [
+    "# Relatório local",
+    "",
+    `Alvo: ${job.target}`,
+    `Tipo: ${job.detected}`,
+    `Pasta: ${job.directory}`,
+    "",
+    "Esta execução não chamou um modelo. Ela só rodou a CLI do REA.",
+    "",
+  ];
+  for (const step of job.steps) {
+    lines.push(`## ${step.title}`, "");
+    if (step.skip !== undefined) {
+      lines.push(step.skip, "");
+      continue;
+    }
+    lines.push(step.ok ? "Concluído." : "Falhou.", "");
+    for (const fact of step.facts ?? []) lines.push(`- ${fact}`);
+    if ((step.facts ?? []).length > 0) lines.push("");
+    if (step.stderr && !step.ok) {
+      lines.push("```text", clip(step.stderr, 2000), "```", "");
+    }
+  }
+  lines.push("## Evidência", "");
+  lines.push(
+    "Os JSON completos ficam ao lado deste relatório, na pasta evidence.",
+    "",
+  );
+  const markdown = `${lines.join("\n")}\n`;
+  const html = `<!doctype html><html lang="pt-BR"><meta charset="utf-8" /><title>Relatório local</title><pre>${escapeHtml(markdown)}</pre></html>\n`;
+  await writeFile(join(job.directory, "report.md"), markdown);
+  await writeFile(join(job.directory, "report.html"), html);
+  job.report_markdown = markdown;
+  job.headline = job.steps.some((step) => step.ok)
+    ? "Relatório pronto."
+    : "Relatório escrito. Nenhum comando de análise concluiu.";
+};
+
+const failJob = async (job, detected, message, note) => {
+  job.state = "failed";
+  job.detected = detected;
+  note(message);
+  await mkdir(job.directory, { recursive: true });
+  await writeReport(job);
+};
+
+const githubRejected = (owner, repo) =>
+  owner === "." ||
+  owner === ".." ||
+  repo === "." ||
+  repo === ".." ||
+  owner.includes("..") ||
+  repo.includes("..");
+
+const resolveSource = async (job, note) => {
+  const target = job.target.trim();
+  const match = githubUrl.exec(target);
+  if (match !== null) {
+    if (githubRejected(match[1], match[2])) {
+      await failJob(job, "github", "URL do GitHub recusada.", note);
+      return undefined;
+    }
+    const destination = join(job.directory, "source");
+    note(`Clonando ${job.target}`);
+    await mkdir(job.directory, { recursive: true });
+    try {
+      await execFileAsync(
+        "git",
+        ["clone", "--depth", "1", "--", target, destination],
+        {
+          timeout: 120_000,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        },
+      );
+    } catch (cause) {
+      await failJob(
+        job,
+        "github",
+        cause instanceof Error ? cause.message : String(cause),
+        note,
+      );
+      return undefined;
+    }
+    return destination;
+  }
+  if (/^https?:\/\//u.test(target)) {
+    await failJob(
+      job,
+      "url",
+      "Só URLs https://github.com/org/repo são aceitas. Um site em execução não é clonado daqui.",
+      note,
+    );
+    return undefined;
+  }
+  const source = resolve(job.target);
+  if (!(await exists(source))) {
+    await failJob(job, "ausente", `Caminho não encontrado: ${source}`, note);
+    return undefined;
+  }
+  return source;
+};
+
+const analyze = async (job, onUpdate) => {
+  job.state = "running";
+  const note = (message) => {
+    job.events.push({ message });
+    onUpdate();
+  };
+  const source = await resolveSource(job, note);
+  if (source === undefined) return;
+  job.resolved = source;
+  job.detected = await detectTarget(source);
+  note(`Tipo detectado: ${job.detected}`);
+  await mkdir(join(job.directory, "evidence"), { recursive: true });
+  const steps = await planSteps(job.detected, source);
+  for (const step of steps) {
+    if (step.skip !== undefined) {
+      job.steps.push(step);
+      note(step.skip);
+      continue;
+    }
+    note(`Rodando ${step.title}`);
+    const result =
+      step.precomputed ?? (await runRea(step.args, step.timeoutMs));
+    const parsed = parseJson(result.stdout);
+    const record = {
+      ...step,
+      ok: result.ok,
+      facts: factsFrom(parsed),
+      stderr: result.stderr,
+    };
+    job.steps.push(record);
+    await writeFile(
+      join(job.directory, "evidence", `${step.id}.json`),
+      result.stdout.length > 0
+        ? result.stdout
+        : `${JSON.stringify({ ok: false, stderr: result.stderr })}\n`,
+    );
+    note(result.ok ? `${step.title} concluído` : `${step.title} falhou`);
+  }
+  await writeReport(job);
+  job.state = job.steps.some((step) => step.ok) ? "done" : "failed";
+  await writeFile(
+    join(job.directory, "job.json"),
+    JSON.stringify(job, null, 2),
+  );
+};
+
+const createJob = (output, target) => {
+  const id = `${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+  return {
+    id,
+    target,
+    state: "queued",
+    detected: null,
+    directory: join(output, id),
+    events: [],
+    steps: [],
+    headline: "",
+    report_markdown: "",
+  };
+};
+
+let options;
+try {
+  options = parseArgs(process.argv.slice(2));
+} catch (cause) {
+  process.stderr.write(`${cause instanceof Error ? cause.message : cause}\n`);
+  process.exit(2);
+}
+if (options.help || (options.target === undefined && !options.serve)) {
+  help();
+  process.exit(options.help ? 0 : 2);
+}
+await mkdir(options.output, { recursive: true });
+const jobs = new Map();
+if (options.serve)
+  await startLocalDashboard({
+    options,
+    jobs,
+    dashboardPath,
+    analyze,
+    createJob,
+  });
+if (options.target !== undefined) {
+  const job = createJob(options.output, options.target);
+  jobs.set(job.id, job);
+  await analyze(job, () => {});
+  process.stderr.write(
+    `${job.headline}\n${join(job.directory, "report.md")}\n`,
+  );
+  if (!options.serve) process.exit(job.state === "done" ? 0 : 1);
+}

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Análise local</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1c1915;
+        --muted: #5c564c;
+        --line: #e4ddd2;
+        --paper: #f7f3ec;
+        --card: #fffdf9;
+        --accent: #2f5d50;
+        --warn: #8a4b12;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+        background: var(--paper);
+        color: var(--ink);
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+      h1 { font-size: 2rem; font-weight: 600; margin: 0 0 8px; }
+      p { line-height: 1.5; }
+      .lede { color: var(--muted); margin-top: 0; }
+      form, article, section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 16px;
+      }
+      label { display: block; font-size: 0.95rem; margin-bottom: 8px; }
+      input[type="text"] {
+        width: 100%;
+        font: 16px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+      button {
+        margin-top: 12px;
+        background: var(--accent);
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font: 600 16px/1.2 Georgia, serif;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: wait; }
+      .status { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+      .warn { color: var(--warn); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 4px 0; }
+      pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+      a { color: var(--accent); }
+      footer { color: var(--muted); font-size: 0.9rem; margin-top: 24px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Análise local</h1>
+      <p class="lede">
+        Cole um caminho nesta máquina ou a URL de um repositório público do GitHub.
+        A análise usa a CLI do REA nesta máquina. Nenhum modelo de IA entra nesse caminho.
+      </p>
+      <form id="analyze-form">
+        <label for="target">Caminho ou URL do GitHub</label>
+        <input id="target" name="target" type="text" autocomplete="off" spellcheck="false" placeholder="/caminho/do/app ou https://github.com/org/repo" required />
+        <button id="submit" type="submit">Analisar</button>
+      </form>
+      <section>
+        <h2>Andamento</h2>
+        <p id="status" class="status">Nenhuma análise nesta sessão.</p>
+        <ul id="events"></ul>
+      </section>
+      <article id="report-wrap" hidden>
+        <h2>Relatório</h2>
+        <p><a id="report-link" href="">Abrir o HTML do relatório</a></p>
+        <div id="report"></div>
+      </article>
+      <footer>
+        Painel só em 127.0.0.1. Não é um serviço hospedado. A CLI e o MCP do REA continuam iguais.
+      </footer>
+    </main>
+    <script>
+      const form = document.querySelector("#analyze-form");
+      const target = document.querySelector("#target");
+      const submit = document.querySelector("#submit");
+      const status = document.querySelector("#status");
+      const events = document.querySelector("#events");
+      const reportWrap = document.querySelector("#report-wrap");
+      const report = document.querySelector("#report");
+      const reportLink = document.querySelector("#report-link");
+      let timer = 0;
+
+      const render = (job) => {
+        status.textContent = job === null
+          ? "Nenhuma análise nesta sessão."
+          : `${job.state} — ${job.detected ?? "detectando"} — ${job.target}`;
+        events.replaceChildren();
+        for (const event of job?.events ?? []) {
+          const item = document.createElement("li");
+          item.textContent = event.message;
+          events.append(item);
+        }
+        if (job?.state === "done" || job?.state === "failed") {
+          reportWrap.hidden = false;
+          reportLink.href = `/reports/${job.id}`;
+          report.replaceChildren();
+          const heading = document.createElement("p");
+          heading.textContent = job.headline ?? "";
+          report.append(heading);
+          if (job.report_markdown) {
+            const pre = document.createElement("pre");
+            pre.textContent = job.report_markdown;
+            report.append(pre);
+          }
+        }
+      };
+
+      const poll = (id) => {
+        clearInterval(timer);
+        timer = setInterval(async () => {
+          const response = await fetch(`/api/jobs/${id}`);
+          if (!response.ok) return;
+          const job = await response.json();
+          render(job);
+          if (job.state === "done" || job.state === "failed") {
+            clearInterval(timer);
+            submit.disabled = false;
+          }
+        }, 1000);
+      };
+
+      const resume = async () => {
+        const response = await fetch("/api/jobs");
+        if (!response.ok) return;
+        const list = await response.json();
+        const job = list.at(-1);
+        if (job === undefined) return;
+        render(job);
+        if (job.state === "queued" || job.state === "running") {
+          submit.disabled = true;
+          poll(job.id);
+        }
+      };
+      resume();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        submit.disabled = true;
+        reportWrap.hidden = true;
+        status.textContent = "Enviando…";
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ target: target.value }),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          status.textContent = body.message ?? "Não foi possível iniciar.";
+          status.classList.add("warn");
+          submit.disabled = false;
+          return;
+        }
+        status.classList.remove("warn");
+        render(body);
+        poll(body.id);
+      });
+    </script>
+  </body>
+</html>
