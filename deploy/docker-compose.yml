@@ -1,0 +1,48 @@
+services:
+  rea-admin:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: rea-admin:local
+    env_file:
+      - .env
+    expose:
+      - "4174"
+    volumes:
+      - rea-data:/data
+    environment:
+      REA_BIND: 0.0.0.0
+      REA_ANALYZE_PORT: "4174"
+      REA_ANALYZE_OUTPUT: /data/analyses
+      REA_ADMIN_DIR: /data/admin
+      REA_SANDBOX: "1"
+      REA_SANDBOX_MODE: isolate
+      REA_SANDBOX_MEMORY_MB: "2048"
+      REA_TRUST_PROXY: "1"
+      REA_COOKIE_SECURE: "1"
+    mem_limit: 6g
+    cpus: "2"
+    # Docker's default seccomp blocks unshare. Isolate needs it for a network namespace.
+    security_opt:
+      - seccomp:unconfined
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4174/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - traefik.enable=${REA_TRAEFIK_ENABLE:-true}
+      - traefik.http.routers.rea.rule=Host(`${REA_TRAEFIK_HOST:-rea-187-77-225-72.sslip.io}`)
+      - traefik.http.routers.rea.entrypoints=${REA_TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.rea.tls=true
+      - traefik.http.routers.rea.tls.certresolver=${REA_TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.rea.loadbalancer.server.port=${REA_ANALYZE_PORT:-4174}
+volumes:
+  rea-data:

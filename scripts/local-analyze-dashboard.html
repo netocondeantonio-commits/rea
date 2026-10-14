@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>REA local</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1c1915;
+        --muted: #5e574c;
+        --line: #e3d9cc;
+        --paper: #f6f1e8;
+        --card: #fffdf8;
+        --accent: #1f6b4a;
+        --warn: #8a4b12;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --ink: #f3efe6;
+        --muted: #c3b8a8;
+        --line: #3d3830;
+        --paper: #17140f;
+        --card: #262219;
+        --accent: #8dccb0;
+        --warn: #f0b27a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", Palatino, Georgia, serif;
+        background: var(--paper);
+        color: var(--ink);
+      }
+      button, input, select { font: inherit; color: inherit; }
+      header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        position: sticky;
+        top: 0;
+      }
+      nav, .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tools { margin-left: auto; }
+      nav button, .tools button, button.quiet {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      nav button[aria-current="page"] { border-color: var(--line); background: var(--paper); }
+      main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+      h1 { font-size: 1.8rem; font-weight: 600; margin: 0 0 8px; }
+      h2 { font-size: 1.15rem; margin: 0 0 8px; }
+      p { line-height: 1.45; }
+      .muted { color: var(--muted); }
+      .warn { color: var(--warn); }
+      .light { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+      .light.green { background: #1f6b4a; }
+      .light.amber { background: #c47b12; }
+      .light.red { background: #9b2c2c; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+      .card, form.card, table {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .card, form.card { padding: 14px; margin-top: 12px; }
+      button.primary {
+        background: var(--accent);
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      :root[data-theme="dark"] button.primary { color: #14241c; }
+      input, select, textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+      }
+      label { display: block; margin: 10px 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .login form { width: min(440px, 100%); }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .map { max-width: 100%; background: white; border-radius: 8px; }
+      a { color: var(--accent); }
+      pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+      footer { color: var(--muted); margin-top: 28px; font-size: 0.92rem; }
+    </style>
+  </head>
+  <body>
+    <div id="login" class="login" hidden></div>
+    <div id="app" hidden>
+      <header>
+        <strong>REA</strong>
+        <nav id="nav"></nav>
+        <p id="demo" class="warn" hidden></p>
+        <div class="tools">
+          <button id="theme" type="button"></button>
+          <button id="lang" type="button"></button>
+          <button id="logout" type="button"></button>
+        </div>
+      </header>
+      <main id="main"></main>
+    </div>
+    <script>
+      const copy = {
+        "pt-BR": {
+          title: "Administração local",
+          hint: "Usuário e senha vêm deste computador. Por padrão a página escuta em 127.0.0.1. Atrás de um proxy, use outro endereço sem as portas 80 e 443. Nenhum modelo entra nesse caminho.",
+          user: "Usuário",
+          password: "Senha",
+          enter: "Entrar",
+          logout: "Sair",
+          themeToDark: "Escuro",
+          themeToLight: "Claro",
+          lang: "English",
+          home: "Início",
+          fresh: "Nova análise",
+          history: "Histórico",
+          library: "Biblioteca",
+          settings: "Ajustes",
+          users: "Usuários",
+          audit: "Auditoria",
+          engines: "Motores nesta máquina",
+          queue: "Fila",
+          recent: "Análises recentes",
+          empty: "Nada por aqui ainda.",
+          ready: "pronto",
+          missing: "ausente",
+          notRun: "presente, não executado",
+          fridaInspect: "lista dispositivos, sem anexar",
+          apktoolStep: "decodifica manifesto e strings, sem smali",
+          healthy: "doctor saudável",
+          notHealthy: "doctor respondeu, sem marcar saudável",
+          unavailable: "doctor indisponível",
+          ghidra: "Ghidra",
+          jadx: "JADX",
+          rizin: "Rizin",
+          frida: "Frida",
+          apktool: "Apktool",
+          doctor: "rea doctor",
+          target: "Caminho local ou URL do GitHub",
+          subject: "Alvo",
+          engineHint:
+            "Caminho vazio mantém o valor que já está no ambiente. Só um administrador grava estes campos.",
+          kind: "Tipo",
+          auto: "Detectar",
+          javascript: "JavaScript",
+          android: "Android",
+          native: "Nativo",
+          website: "Site estático",
+          dotnet: ".NET",
+          run: "Analisar",
+          runHint: "A fila roda uma análise por vez. O pacote sai em português e inglês.",
+          cancel: "Cancelar",
+          rerun: "Rodar de novo",
+          zip: "Baixar ZIP",
+          report: "Registro curto",
+          log: "Andamento",
+          results: "Resultado",
+          map: "Mapa",
+          open: "Abrir",
+          name: "Nome",
+          note: "Nota",
+          add: "Guardar alvo",
+          remove: "Remover",
+          output: "Pasta dos relatórios",
+          language: "Idioma padrão",
+          theme: "Tema",
+          save: "Salvar",
+          tokenOn: "Token de API configurado. Scripts podem enviar Authorization: Bearer.",
+          tokenOff: "Sem token. Defina REA_ADMIN_TOKEN (16 caracteres ou mais) e reinicie o painel.",
+          role: "Papel",
+          admin: "administrador",
+          operator: "usuário",
+          create: "Criar usuário",
+          disable: "Desativar",
+          enable: "Ativar",
+          when: "Quando",
+          who: "Quem",
+          action: "Ação",
+          detail: "Detalhe",
+          state: "Estado",
+          queued: "na fila",
+          running: "rodando",
+          done: "concluída",
+          failed: "falhou",
+          cancelled: "cancelada",
+          footer: "Sem planos nem cobrança. A CLI e o MCP do REA continuam iguais. Licenças de IDA, Hopper, JEB e das peças GPL continuam valendo.",
+          saved: "Guardado.",
+          error: "Não foi possível concluir.",
+          compare: "Comparar",
+          search: "Busca",
+          priority: "Prioridade",
+          low: "baixa",
+          normal: "normal",
+          high: "alta",
+          fast: "Modo rápido (só JavaScript ou site)",
+          limitsNote: "O sandbox começa desligado aqui. Na imagem de produção ele liga em isolate: sem rede, com taskset e prlimit. O modo docker usa cgroup.",
+          checklist: "Lista de observações",
+          signatureHint: "A assinatura é uma etiqueta HMAC local. Não é um certificado público.",
+          ramNote: "Sem sandbox, o número de RAM só é mostrado. No isolate, prlimit e -Xmx limitam o processo. No modo docker, --memory e --cpus são o cgroup.",
+          share: "Link só neste computador",
+          shareHint: "O endereço funciona enquanto este painel estiver aberto, só em 127.0.0.1, por cerca de 7 dias.",
+          client: "PDF cliente",
+          internal: "PDF interno",
+          ctf: "PDF CTF",
+          schedule: "Repetir",
+          scheduleHint: "Minutos, mínimo 15. A repetição para quando o painel fecha. O aviso sai só se o hash mudar.",
+          webhook: "Webhook (Discord, Telegram ou JSON)",
+          chat: "chat_id do Telegram",
+          nice: "nice do processo (0 a 19)",
+          ram: "RAM em MB (limite do sandbox, quando ligado)",
+          exportEngines: "Exportar motores",
+          importEngines: "Importar motores",
+          notEnabled: "Ainda não habilitado",
+          dockerNote: "Sandbox desligado. A análise roda neste computador e o número de RAM não isola o processo.",
+          dockerOn: "Sandbox ligado. O padrão é isolate (sem rede). REA_SANDBOX_MODE=docker usa --memory e --cpus. Sem a ferramenta, a análise não roda aqui.",
+          systemMap: "Mapa do sistema",
+          apiDocs: "Documentação da API",
+          noBilling: "Sem planos nem cobrança.",
+          upload: "Enviar APK ou binário",
+          demoBanner: "Modo demo: só upload, GitHub ou o APK fixado.",
+          sandbox: "Sandbox",
+          sandboxImage: "Imagem Docker",
+          cpus: "CPUs do sandbox (1 a 4)",
+          query: "Texto",
+          find: "Procurar",
+          left: "Versão A",
+          right: "Versão B",
+          added: "Entrou",
+          removed: "Saiu",
+        },
+        en: {
+          title: "Local admin",
+          hint: "The user and password come from this computer. The page listens on 127.0.0.1 unless you set another address. Ports 80 and 443 stay with the proxy. No model is on this path.",
+          user: "User",
+          password: "Password",
+          enter: "Sign in",
+          logout: "Sign out",
+          themeToDark: "Dark",
+          themeToLight: "Light",
+          lang: "Português",
+          home: "Home",
+          fresh: "New analysis",
+          history: "History",
+          library: "Library",
+          settings: "Settings",
+          users: "Users",
+          audit: "Audit",
+          engines: "Engines on this machine",
+          queue: "Queue",
+          recent: "Recent analyses",
+          empty: "Nothing here yet.",
+          ready: "ready",
+          missing: "missing",
+          notRun: "present, not run",
+          fridaInspect: "lists devices, does not attach",
+          apktoolStep: "decodes the manifest and strings, no smali",
+          healthy: "doctor is healthy",
+          notHealthy: "doctor answered, not marked healthy",
+          unavailable: "doctor unavailable",
+          ghidra: "Ghidra",
+          jadx: "JADX",
+          rizin: "Rizin",
+          frida: "Frida",
+          apktool: "Apktool",
+          doctor: "rea doctor",
+          target: "Local path or GitHub URL",
+          subject: "Target",
+          engineHint:
+            "An empty path keeps the value already in the environment. Only an administrator saves these fields.",
+          kind: "Type",
+          auto: "Detect",
+          javascript: "JavaScript",
+          android: "Android",
+          native: "Native",
+          website: "Static site",
+          dotnet: ".NET",
+          run: "Analyze",
+          runHint: "The queue runs one analysis at a time. The package is written in Portuguese and English.",
+          cancel: "Cancel",
+          rerun: "Run again",
+          zip: "Download ZIP",
+          report: "Short log",
+          log: "Progress",
+          results: "Result",
+          map: "Map",
+          open: "Open",
+          name: "Name",
+          note: "Note",
+          add: "Save target",
+          remove: "Remove",
+          output: "Report folder",
+          language: "Default language",
+          theme: "Theme",
+          save: "Save",
+          tokenOn: "API token is configured. Scripts can send Authorization: Bearer.",
+          tokenOff: "No token. Set REA_ADMIN_TOKEN (16 characters or more) and restart the page.",
+          role: "Role",
+          admin: "administrator",
+          operator: "user",
+          create: "Create user",
+          disable: "Disable",
+          enable: "Enable",
+          when: "When",
+          who: "Who",
+          action: "Action",
+          detail: "Detail",
+          state: "State",
+          queued: "queued",
+          running: "running",
+          done: "done",
+          failed: "failed",
+          cancelled: "cancelled",
+          footer: "No plans and no billing. The REA CLI and MCP stay the same. IDA, Hopper, JEB, and GPL terms still apply.",
+          saved: "Saved.",
+          error: "That did not finish.",
+          compare: "Compare",
+          search: "Search",
+          priority: "Priority",
+          low: "low",
+          normal: "normal",
+          high: "high",
+          fast: "Fast mode (JavaScript or site only)",
+          limitsNote: "The sandbox starts off here. The production image turns on isolate: no network, with taskset and prlimit. Docker mode uses a cgroup.",
+          checklist: "Observation list",
+          signatureHint: "The signature is a local HMAC tag. It is not a public certificate.",
+          ramNote: "Without the sandbox, the RAM number is only shown. Isolate uses prlimit and -Xmx. Docker mode applies --memory and --cpus.",
+          share: "Link on this computer only",
+          shareHint: "The address works while this page is open, only on 127.0.0.1, for about 7 days.",
+          client: "Client PDF",
+          internal: "Internal PDF",
+          ctf: "CTF PDF",
+          schedule: "Repeat",
+          scheduleHint: "Minutes, 15 minimum. Repeating stops when the page stops. A notice is sent only when the hash changes.",
+          webhook: "Webhook (Discord, Telegram, or JSON)",
+          chat: "Telegram chat_id",
+          nice: "Process nice (0 to 19)",
+          ram: "RAM MB (sandbox limit, when on)",
+          exportEngines: "Export engines",
+          importEngines: "Import engines",
+          notEnabled: "Not enabled",
+          dockerNote: "Sandbox is off. Analysis runs on this computer and the RAM number does not isolate the process.",
+          dockerOn: "Sandbox is on. The default is isolate (no network). REA_SANDBOX_MODE=docker uses --memory and --cpus. If that tool is missing, analysis does not run here.",
+          systemMap: "System map",
+          apiDocs: "API docs",
+          noBilling: "No plans and no billing.",
+          upload: "Upload an APK or binary",
+          demoBanner: "Demo mode: uploads, GitHub, or the pinned APK only.",
+          sandbox: "Sandbox",
+          sandboxImage: "Docker image",
+          cpus: "Sandbox CPUs (1 to 4)",
+          query: "Text",
+          find: "Search",
+          left: "Version A",
+          right: "Version B",
+          added: "Added",
+          removed: "Removed",
+        },
+      };
+
+      const login = document.querySelector("#login");
+      const app = document.querySelector("#app");
+      const nav = document.querySelector("#nav");
+      const main = document.querySelector("#main");
+      const themeButton = document.querySelector("#theme");
+      const langButton = document.querySelector("#lang");
+      const logoutButton = document.querySelector("#logout");
+      let lang = localStorage.getItem("rea-lang") === "en" ? "en" : "pt-BR";
+      let theme = localStorage.getItem("rea-theme") === "dark" ? "dark" : "light";
+      let me = null;
+      let view = "home";
+      let jobId = "";
+      let generation = 0;
+      let painting = false;
+      const t = (key) => copy[lang][key] ?? key;
+      const roleName = (role) => (role === "admin" ? t("admin") : t("operator"));
+      const demo = document.querySelector("#demo");
+      const stateLabel = (state) => t(state) || state;
+
+      const el = (tag, attrs = {}, children = []) => {
+        const node = document.createElement(tag);
+        for (const [key, value] of Object.entries(attrs)) {
+          if (value === undefined) continue;
+          if (key === "text") node.textContent = value;
+          else node.setAttribute(key, value);
+        }
+        for (const child of children) if (child) node.append(child);
+        return node;
+      };
+
+      const applyChrome = () => {
+        document.documentElement.lang = lang === "en" ? "en" : "pt-BR";
+        document.documentElement.dataset.theme = theme;
+        localStorage.setItem("rea-lang", lang);
+        localStorage.setItem("rea-theme", theme);
+        themeButton.textContent = theme === "dark" ? t("themeToLight") : t("themeToDark");
+        langButton.textContent = t("lang");
+        logoutButton.textContent = t("logout");
+        demo.hidden = me?.demo !== true;
+        demo.textContent = t("demoBanner");
+      };
+
+      const api = async (path, options) => {
+        const response = await fetch(path, options);
+        const type = response.headers.get("content-type") ?? "";
+        const body = type.includes("json") ? await response.json() : null;
+        return { ok: response.ok, status: response.status, body };
+      };
+
+      const message = (body) =>
+        (lang === "en" ? body?.message_en : body?.message) || t("error");
+
+      const footer = () => el("footer", { text: t("footer") });
+
+      const engineCard = (key, row) => {
+        let detail = row?.ready ? t("ready") : t("missing");
+        if (key === "frida")
+          detail = row?.ready ? t("fridaInspect") : t("missing");
+        if (key === "apktool")
+          detail = row?.ready ? t("apktoolStep") : t("missing");
+        if (key === "doctor") {
+          if (row?.detail === "healthy") detail = t("healthy");
+          else if (row?.detail === "not-healthy") detail = t("notHealthy");
+          else detail = t("unavailable");
+        }
+        return el("article", { class: "card" }, [
+          el("h2", { text: t(key) }),
+          el("p", { text: detail }),
+        ]);
+      };
+
+      const jobTable = (jobs) => {
+        const table = el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", { text: t("when") }),
+              el("th", { text: t("state") }),
+              el("th", { text: t("subject") }),
+              el("th", { text: t("who") }),
+            ]),
+          ]),
+        ]);
+        const body = el("tbody");
+        for (const job of jobs) {
+          const button = el("button", { class: "quiet", type: "button", text: job.target });
+          button.addEventListener("click", () => openJob(job.id));
+          body.append(
+            el("tr", {}, [
+              el("td", { text: job.createdAt ?? "" }),
+              el("td", { text: stateLabel(job.state) }),
+              el("td", {}, [button]),
+              el("td", { text: job.user ?? "" }),
+            ]),
+          );
+        }
+        table.append(body);
+        return table;
+      };
+
+      const renderHome = async () => {
+        const result = await api("/api/home");
+        const data = result.body ?? {};
+        const engines = data.engines ?? {};
+        return el("section", {}, [
+          el("h1", { text: t("home") }),
+          el("h2", { text: t("engines") }),
+          el("div", { class: "grid" }, [
+            engineCard("ghidra", engines.ghidra),
+            engineCard("jadx", engines.jadx),
+            engineCard("rizin", engines.rizin),
+            engineCard("apktool", engines.apktool),
+            engineCard("frida", engines.frida),
+            engineCard("doctor", engines.doctor),
+          ]),
+          el("h2", { text: t("queue") }),
+          (data.queue ?? []).length === 0
+            ? el("p", { class: "muted", text: t("empty") })
+            : jobTable(data.queue),
+          el("h2", { text: t("recent") }),
+          (data.recent ?? []).length === 0
+            ? el("p", { class: "muted", text: t("empty") })
+            : jobTable(data.recent),
+          footer(),
+        ]);
+      };
+
+      const kindSelect = (selected) => {
+        const select = el("select", { id: "kind", name: "kind" });
+        for (const kind of ["auto", "javascript", "android", "native", "website", "dotnet"]) {
+          const option = el("option", { value: kind, text: t(kind) });
+          if (kind === selected) option.selected = true;
+          select.append(option);
+        }
+        return select;
+      };
+
+      const renderNew = (preset = "") => {
+        const error = el("p", { class: "warn" });
+        const target = el("input", { id: "target", name: "target", type: "text", value: preset });
+        target.setAttribute("autocomplete", "off");
+        target.setAttribute("spellcheck", "false");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "target", text: t("target") }),
+          target,
+          el("label", { for: "kind", text: t("kind") }),
+          kindSelect("auto"),
+          el("label", { for: "priority", text: t("priority") }),
+          prioritySelect(),
+          el("label", { for: "fast", text: t("fast") }),
+          checkbox("fast"),
+          el("label", { for: "upload", text: t("upload") }),
+          uploadInput(error),
+          el("button", { class: "primary", type: "submit", text: t("run") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/analyze", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              target: target.value,
+              kind: form.querySelector("#kind").value,
+              priority: Number(form.querySelector("#priority").value),
+              fast: form.querySelector("#fast").checked,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          openJob(response.body.id);
+        });
+        return el("section", {}, [
+          el("h1", { text: t("fresh") }),
+          el("p", { class: "muted", text: t("runHint") }),
+          el("p", { class: "warn", text: t("limitsNote") }),
+          form,
+          notEnabledCard(),
+          footer(),
+        ]);
+      };
+
+      const prioritySelect = () => {
+        const select = el("select", { id: "priority", name: "priority" });
+        for (const [value, label] of [
+          ["0", "normal"],
+          ["1", "high"],
+          ["-1", "low"],
+        ]) {
+          select.append(el("option", { value, text: t(label) }));
+        }
+        return select;
+      };
+
+      const checkbox = (id) => {
+        const input = el("input", { id, type: "checkbox" });
+        input.style.width = "auto";
+        return input;
+      };
+
+      const uploadInput = (error) => {
+        const input = el("input", { id: "upload", type: "file" });
+        input.addEventListener("change", async () => {
+          const chosen = input.files?.[0];
+          if (!chosen) return;
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "x-rea-filename": chosen.name },
+            body: chosen,
+          });
+          const type = response.headers.get("content-type") ?? "";
+          const payload = type.includes("json") ? await response.json() : null;
+          if (!response.ok) {
+            error.textContent = message(payload);
+            return;
+          }
+          openJob(payload.id);
+        });
+        return input;
+      };
+
+      const notEnabledCard = () =>
+        el("article", { class: "card" }, [
+          el("h2", { text: me?.sandbox ? t("dockerOn") : t("notEnabled") }),
+          el("p", { text: me?.sandbox ? t("dockerOn") : t("dockerNote") }),
+          el("p", { text: t("ramNote") }),
+        ]);
+
+      const artifactCards = (job) => {
+        const wrap = el("div", { class: "grid" });
+        const cards = (job.artifacts ?? []).filter(
+          (item) => item.lang === "both" || item.lang === lang,
+        );
+        for (const item of cards) {
+          const title = lang === "en" ? item.title_en : item.title_pt;
+          const blurb = lang === "en" ? item.blurb_en : item.blurb_pt;
+          const bits = [el("h2", { text: title ?? "" }), el("p", { text: blurb ?? "" })];
+          if (typeof item.href === "string" && item.href.startsWith("/packages/")) {
+            bits.push(el("a", { href: item.href, text: t("open") }));
+          }
+          if (typeof item.markdown_href === "string" && item.markdown_href.startsWith("/packages/")) {
+            bits.push(document.createTextNode(" "));
+            bits.push(el("a", { href: item.markdown_href, text: "Markdown" }));
+          }
+          wrap.append(el("article", { class: "card" }, bits));
+        }
+        return wrap;
+      };
+
+      const renderJob = async () => {
+        const result = await api(`/api/jobs/${jobId}`);
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const job = result.body;
+        const active = job.state === "queued" || job.state === "running";
+        const actions = el("div", { class: "row" });
+        if (active) {
+          const cancel = el("button", { class: "primary", type: "button", text: t("cancel") });
+          cancel.addEventListener("click", async () => {
+            await api(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+            await show("job");
+          });
+          actions.append(cancel);
+        }
+        const rerun = el("button", { type: "button", text: t("rerun") });
+        rerun.addEventListener("click", async () => {
+          const response = await api(`/api/jobs/${job.id}/rerun`, { method: "POST" });
+          if (response.ok) openJob(response.body.id);
+        });
+        actions.append(rerun);
+        if (/^[A-Za-z0-9-]+$/u.test(job.id)) {
+          actions.append(el("a", { href: `/api/jobs/${job.id}/export.zip`, text: t("zip") }));
+          actions.append(el("a", { href: `/reports/${job.id}`, text: t("report") }));
+          for (const template of ["client", "internal", "ctf"]) {
+            actions.append(
+              el("a", {
+                href: `/api/jobs/${job.id}/report.pdf?template=${template}`,
+                text: t(template),
+              }),
+            );
+          }
+          const share = el("button", { type: "button", text: t("share") });
+          share.addEventListener("click", async () => {
+            const response = await api(`/api/jobs/${job.id}/share`, { method: "POST" });
+            if (!response.ok) return;
+            sessionStorage.setItem(`rea-share-${job.id}`, response.body.path);
+            await show("job");
+          });
+          actions.append(share);
+        }
+        const log = el("ul");
+        for (const event of job.events ?? []) log.append(el("li", { text: event.message }));
+        const map = (job.artifacts ?? []).find(
+          (item) => typeof item.href === "string" && item.href.endsWith("architecture.svg"),
+        );
+        const section = el("section", {}, [
+          el("h1", { text: stateLabel(job.state) }),
+          el("p", { text: job.target }),
+          el("p", {
+            class: "muted",
+            text: `${job.kind ?? "auto"} · ${job.user ?? ""} · ${t(job.priority === 1 ? "high" : job.priority === -1 ? "low" : "normal")}${job.fast ? " · fast" : ""}`,
+          }),
+          actions,
+          el("h2", { text: t("log") }),
+          log,
+        ]);
+        if (job.digest) section.append(el("p", { text: `SHA-256 ${job.digest}` }));
+        if (job.signature) section.append(el("p", { class: "muted", text: t("signatureHint") }));
+        if (job.ramLimitMb > 0) section.append(el("p", { class: "warn", text: t("ramNote") }));
+        const shared = sessionStorage.getItem(`rea-share-${job.id}`);
+        if (shared) {
+          section.append(el("p", { text: `${location.origin}${shared}` }));
+          section.append(el("p", { class: "muted", text: t("shareHint") }));
+        }
+        const checks = el("ul");
+        for (const item of job.checklist?.items ?? []) {
+          const row = el("li");
+          row.append(
+            el("span", { class: `light ${item.status}` }),
+            document.createTextNode(lang === "en" ? item.observation_en : item.observation),
+          );
+          checks.append(row);
+        }
+        if ((job.checklist?.items ?? []).length > 0)
+          section.append(el("h2", { text: t("checklist") }), checks);
+        if (map) {
+          section.append(el("h2", { text: t("map") }));
+          section.append(el("img", { class: "map", alt: t("map"), src: map.href }));
+        }
+        section.append(el("h2", { text: t("results") }), artifactCards(job), footer());
+        return section;
+      };
+
+      const renderHistory = async () => {
+        const result = await api("/api/jobs");
+        const jobs = result.body ?? [];
+        return el("section", {}, [
+          el("h1", { text: t("history") }),
+          jobs.length === 0 ? el("p", { class: "muted", text: t("empty") }) : jobTable(jobs),
+          footer(),
+        ]);
+      };
+
+      const renderLibrary = async () => {
+        const result = await api("/api/targets");
+        const error = el("p", { class: "warn" });
+        const name = el("input", { id: "name", type: "text" });
+        const target = el("input", { id: "library-target", type: "text" });
+        const note = el("input", { id: "note", type: "text" });
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "name", text: t("name") }),
+          name,
+          el("label", { for: "library-target", text: t("target") }),
+          target,
+          el("label", { for: "kind", text: t("kind") }),
+          kindSelect("auto"),
+          el("label", { for: "note", text: t("note") }),
+          note,
+          el("button", { class: "primary", type: "submit", text: t("add") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/targets", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: name.value,
+              target: target.value,
+              kind: form.querySelector("#kind").value,
+              note_pt: note.value,
+              note_en: note.value,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await show("library");
+        });
+        const list = el("div");
+        for (const item of result.body ?? []) {
+          const analyze = el("button", { class: "primary", type: "button", text: t("run") });
+          analyze.addEventListener("click", async () => {
+            const response = await api("/api/analyze", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ target: item.target, kind: item.kind }),
+            });
+            if (response.ok) openJob(response.body.id);
+          });
+          const remove = el("button", { type: "button", text: t("remove") });
+          remove.addEventListener("click", async () => {
+            await api(`/api/targets/${item.id}`, { method: "DELETE" });
+            await show("library");
+          });
+          const noteText = lang === "en" ? item.note_en : item.note_pt;
+          const minutes = el("input", {
+            type: "number",
+            min: "15",
+            value: item.everyMinutes ?? "",
+          });
+          minutes.style.width = "8rem";
+          minutes.setAttribute("aria-label", t("schedule"));
+          const saveSchedule = el("button", { type: "button", text: t("schedule") });
+          saveSchedule.addEventListener("click", async () => {
+            const raw = minutes.value.trim();
+            const response = await api(`/api/targets/${item.id}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                everyMinutes: raw.length === 0 ? 0 : Number(raw),
+              }),
+            });
+            if (!response.ok) error.textContent = message(response.body);
+            else await show("library");
+          });
+          list.append(
+            el("article", { class: "card" }, [
+              el("h2", { text: item.name }),
+              el("p", { text: item.target }),
+              el("p", { class: "muted", text: noteText || item.kind }),
+              el("p", { class: "muted", text: t("scheduleHint") }),
+              el("div", { class: "row" }, [analyze, minutes, saveSchedule, remove]),
+            ]),
+          );
+        }
+        return el("section", {}, [el("h1", { text: t("library") }), form, list, footer()]);
+      };
+
+      const engineFields = (engines) => {
+        const wrap = el("div");
+        for (const key of [
+          "GHIDRA_INSTALL_DIR",
+          "JAVA_HOME",
+          "REA_JADX_MCP_JAR",
+          "REA_RIZIN_COMMAND",
+          "REA_OBJDUMP_COMMAND",
+          "REA_GDB_COMMAND",
+          "GHIDRA_MCP_BIN",
+          "REA_APKTOOL_COMMAND",
+        ]) {
+          const input = el("input", { id: key, name: key, type: "text", value: engines?.[key] ?? "" });
+          wrap.append(el("label", { for: key, text: key }), input);
+        }
+        return wrap;
+      };
+
+      const renderSettings = async () => {
+        const result = await api("/api/settings");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const settings = result.body;
+        const notice = el("p", { class: "muted" });
+        const output = el("input", {
+          id: "output",
+          type: "text",
+          value: settings.outputDir ?? "",
+        });
+        output.setAttribute("placeholder", settings.effectiveOutput ?? "");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "output", text: t("output") }),
+          output,
+          el("label", { for: "language", text: t("language") }),
+          kindSelect(settings.language === "en" ? "en" : "auto"),
+          engineFields(settings.engines),
+          el("label", { for: "webhook", text: t("webhook") }),
+          el("input", { id: "webhook", type: "text", value: settings.webhookUrl ?? "" }),
+          el("label", { for: "chat", text: t("chat") }),
+          el("input", { id: "chat", type: "text", value: settings.telegramChatId ?? "" }),
+          el("label", { for: "nice", text: t("nice") }),
+          el("input", {
+            id: "nice",
+            type: "number",
+            min: "0",
+            max: "19",
+            value: String(settings.cpuNice ?? 0),
+          }),
+          el("label", { for: "ram", text: t("ram") }),
+          el("input", {
+            id: "ram",
+            type: "number",
+            min: "0",
+            value: String(settings.ramLimitMb ?? 0),
+          }),
+          el("label", { for: "sandbox", text: t("sandbox") }),
+          checkbox("sandbox"),
+          el("label", { for: "image", text: t("sandboxImage") }),
+          el("input", {
+            id: "image",
+            type: "text",
+            value: settings.sandboxImage ?? "rea-sandbox:local",
+          }),
+          el("label", { for: "cpus", text: t("cpus") }),
+          el("input", {
+            id: "cpus",
+            type: "number",
+            min: "1",
+            max: "4",
+            value: String(settings.sandboxCpus ?? 1),
+          }),
+          el("button", { class: "primary", type: "submit", text: t("save") }),
+          notice,
+        ]);
+        const language = form.querySelector("select");
+        language.id = "language";
+        language.replaceChildren();
+        for (const [value, label] of [
+          ["pt-BR", "Português"],
+          ["en", "English"],
+        ]) {
+          const option = el("option", { value, text: label });
+          if (value === settings.language) option.selected = true;
+          language.append(option);
+        }
+        form.querySelector("#sandbox").checked = settings.sandbox === true;
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const engines = {};
+          for (const input of form.querySelectorAll("input[name]")) engines[input.name] = input.value;
+          const response = await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              outputDir: output.value,
+              language: language.value,
+              theme,
+              engines,
+              webhookUrl: form.querySelector("#webhook").value,
+              telegramChatId: form.querySelector("#chat").value,
+              cpuNice: Number(form.querySelector("#nice").value),
+              ramLimitMb: Number(form.querySelector("#ram").value),
+              sandbox: form.querySelector("#sandbox").checked,
+              sandboxImage: form.querySelector("#image").value,
+              sandboxCpus: Number(form.querySelector("#cpus").value),
+            }),
+          });
+          notice.textContent = response.ok ? t("saved") : message(response.body);
+          if (response.ok) {
+            lang = language.value === "en" ? "en" : "pt-BR";
+            applyChrome();
+            paintNav();
+          }
+        });
+        const engineTools = el("div", { class: "row" });
+        const exportEngines = el("button", { type: "button", text: t("exportEngines") });
+        exportEngines.addEventListener("click", async () => {
+          const response = await api("/api/settings/engines");
+          if (!response.ok) {
+            notice.textContent = message(response.body);
+            return;
+          }
+          const blob = new Blob([JSON.stringify(response.body, null, 2)], {
+            type: "application/json",
+          });
+          const link = el("a", { href: URL.createObjectURL(blob), download: "rea-engines.json" });
+          link.click();
+        });
+        const importInput = el("input", { id: "import-engines", type: "file", accept: "application/json" });
+        importInput.style.width = "auto";
+        importInput.addEventListener("change", async () => {
+          const file = importInput.files?.[0];
+          if (!file) return;
+          let parsed;
+          try {
+            parsed = JSON.parse(await file.text());
+          } catch {
+            notice.textContent = t("error");
+            return;
+          }
+          const response = await api("/api/settings/engines", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(parsed),
+          });
+          notice.textContent = response.ok ? t("saved") : message(response.body);
+          if (response.ok) await show("settings");
+        });
+        engineTools.append(
+          exportEngines,
+          el("label", { for: "import-engines", text: t("importEngines") }),
+          importInput,
+        );
+        return el("section", {}, [
+          el("h1", { text: t("settings") }),
+          el("p", { text: settings.tokenConfigured ? t("tokenOn") : t("tokenOff") }),
+          el("p", { class: "muted", text: t("engineHint") }),
+          form,
+          engineTools,
+          notEnabledCard(),
+          footer(),
+        ]);
+      };
+
+      const jobOptions = (jobs, id) => {
+        const select = el("select", { id });
+        for (const job of jobs) {
+          select.append(
+            el("option", {
+              value: job.id,
+              text: `${job.createdAt ?? ""} ${job.target ?? ""}`.slice(0, 120),
+            }),
+          );
+        }
+        return select;
+      };
+
+      const renderCompare = async () => {
+        const result = await api("/api/jobs");
+        const jobs = result.body ?? [];
+        const output = el("div");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "left", text: t("left") }),
+          jobOptions(jobs, "left"),
+          el("label", { for: "right", text: t("right") }),
+          jobOptions(jobs, "right"),
+          el("button", { class: "primary", type: "submit", text: t("compare") }),
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/diff", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              left: form.querySelector("#left").value,
+              right: form.querySelector("#right").value,
+            }),
+          });
+          output.replaceChildren();
+          if (!response.ok) {
+            output.append(el("p", { class: "warn", text: message(response.body) }));
+            return;
+          }
+          for (const key of ["hashes", "strings", "routes"]) {
+            const row = response.body[key] ?? {};
+            output.append(
+              el("article", { class: "card" }, [
+                el("h2", { text: key }),
+                el("p", { text: `${t("added")}: ${(row.added ?? []).join("\n") || "—"}` }),
+                el("p", { text: `${t("removed")}: ${(row.removed ?? []).join("\n") || "—"}` }),
+              ]),
+            );
+          }
+        });
+        return el("section", {}, [
+          el("h1", { text: t("compare") }),
+          jobs.length < 2 ? el("p", { class: "muted", text: t("empty") }) : form,
+          output,
+          footer(),
+        ]);
+      };
+
+      const renderSearch = () => {
+        const output = el("div");
+        const query = el("input", { id: "query", type: "text" });
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "query", text: t("query") }),
+          query,
+          el("button", { class: "primary", type: "submit", text: t("find") }),
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api(`/api/search?q=${encodeURIComponent(query.value)}`);
+          output.replaceChildren();
+          if (!response.ok) {
+            output.append(el("p", { class: "warn", text: message(response.body) }));
+            return;
+          }
+          const hits = response.body.hits ?? [];
+          if (hits.length === 0) {
+            output.append(el("p", { class: "muted", text: t("empty") }));
+            return;
+          }
+          const list = el("ul");
+          for (const hit of hits) {
+            const open = el("button", { class: "quiet", type: "button", text: hit.jobId });
+            open.addEventListener("click", () => openJob(hit.jobId));
+            list.append(
+              el("li", {}, [
+                open,
+                document.createTextNode(` ${hit.file}:${hit.line} ${hit.text}`),
+              ]),
+            );
+          }
+          output.append(list);
+        });
+        return el("section", {}, [
+          el("h1", { text: t("search") }),
+          el("p", { class: "muted", text: "strings, endpoints, android.permission" }),
+          form,
+          output,
+          footer(),
+        ]);
+      };
+
+      const renderUsers = async () => {
+        const result = await api("/api/users");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const error = el("p", { class: "warn" });
+        const username = el("input", { id: "new-user", type: "text" });
+        const password = el("input", {
+          id: "new-password",
+          type: "password",
+          autocomplete: "new-password",
+        });
+        const role = el("select", { id: "new-role" }, [
+          el("option", { value: "user", text: t("operator") }),
+          el("option", { value: "admin", text: t("admin") }),
+        ]);
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "new-user", text: t("user") }),
+          username,
+          el("label", { for: "new-password", text: t("password") }),
+          password,
+          el("label", { for: "new-role", text: t("role") }),
+          role,
+          el("button", { class: "primary", type: "submit", text: t("create") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/users", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: username.value,
+              password: password.value,
+              role: role.value,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await show("users");
+        });
+        const list = el("div");
+        for (const user of result.body ?? []) {
+          const toggle = el("button", {
+            type: "button",
+            text: user.disabled ? t("enable") : t("disable"),
+          });
+          toggle.addEventListener("click", async () => {
+            await api(`/api/users/${user.id}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ disabled: !user.disabled }),
+            });
+            await show("users");
+          });
+          const remove = el("button", { type: "button", text: t("remove") });
+          remove.addEventListener("click", async () => {
+            const response = await api(`/api/users/${user.id}`, { method: "DELETE" });
+            if (!response.ok) error.textContent = message(response.body);
+            await show("users");
+          });
+          list.append(
+            el("article", { class: "card" }, [
+              el("h2", { text: user.username }),
+              el("p", { class: "muted", text: `${roleName(user.role)}${user.disabled ? " · off" : ""}` }),
+              el("div", { class: "row" }, [toggle, remove]),
+            ]),
+          );
+        }
+        return el("section", {}, [el("h1", { text: t("users") }), form, list, error, footer()]);
+      };
+
+      const renderAudit = async () => {
+        const result = await api("/api/audit");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const rows = result.body ?? [];
+        if (rows.length === 0)
+          return el("section", {}, [
+            el("h1", { text: t("audit") }),
+            el("p", { class: "muted", text: t("empty") }),
+            footer(),
+          ]);
+        const table = el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", { text: t("when") }),
+              el("th", { text: t("who") }),
+              el("th", { text: t("action") }),
+              el("th", { text: t("detail") }),
+            ]),
+          ]),
+        ]);
+        const body = el("tbody");
+        for (const row of rows) {
+          body.append(
+            el("tr", {}, [
+              el("td", { text: row.at ?? "" }),
+              el("td", { text: row.user ?? "" }),
+              el("td", { text: row.action ?? "" }),
+              el("td", { text: row.detail ?? "" }),
+            ]),
+          );
+        }
+        table.append(body);
+        return el("section", {}, [el("h1", { text: t("audit") }), table, footer()]);
+      };
+
+      const renderSystemMap = async () => {
+        const result = await api("/api/map");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const list = el("ul");
+        for (const row of result.body.engines ?? []) {
+          const note = lang === "en" ? row.note_en : row.note_pt;
+          list.append(
+            el("li", {
+              text: `${row.id}: ${row.runs ? t("ready") : t("notRun")} — ${note}`,
+            }),
+          );
+        }
+        return el("section", {}, [
+          el("h1", { text: t("systemMap") }),
+          el("p", {}, [el("a", { href: "/api/docs", text: t("apiDocs") })]),
+          list,
+          el("p", { class: "muted", text: (result.body.companions ?? []).join(", ") }),
+          el("p", { text: t("noBilling") }),
+          footer(),
+        ]);
+      };
+
+      const builders = {
+        home: renderHome,
+        fresh: () => renderNew(),
+        history: renderHistory,
+        job: renderJob,
+        compare: renderCompare,
+        search: renderSearch,
+        library: renderLibrary,
+        system: renderSystemMap,
+        settings: renderSettings,
+        users: renderUsers,
+        audit: renderAudit,
+      };
+
+      const paintNav = () => {
+        nav.replaceChildren();
+        const items = [
+          ["home", "home"],
+          ["fresh", "fresh"],
+          ["history", "history"],
+          ["compare", "compare"],
+          ["search", "search"],
+          ["library", "library"],
+          ["system", "systemMap"],
+        ];
+        if (me?.user?.role === "admin") {
+          items.push(["settings", "settings"], ["users", "users"], ["audit", "audit"]);
+        }
+        for (const [id, label] of items) {
+          const button = el("button", { type: "button", text: t(label) });
+          if (view === id) button.setAttribute("aria-current", "page");
+          button.addEventListener("click", () => show(id));
+          nav.append(button);
+        }
+      };
+
+      const render = async () => {
+        const token = generation;
+        const node = await (builders[view] ?? renderHome)();
+        if (token !== generation) return;
+        main.replaceChildren(node);
+      };
+
+      const show = async (next) => {
+        view = next;
+        generation += 1;
+        paintNav();
+        painting = true;
+        try {
+          await render();
+        } finally {
+          painting = false;
+        }
+      };
+
+      const openJob = (id) => {
+        jobId = id;
+        void show("job");
+      };
+
+      const showLogin = (text) => {
+        app.hidden = true;
+        login.hidden = false;
+        const error = el("p", { class: "warn", text: text ?? "" });
+        const user = el("input", { id: "login-user", name: "username", type: "text" });
+        user.setAttribute("autocomplete", "username");
+        const password = el("input", {
+          id: "login-password",
+          name: "password",
+          type: "password",
+        });
+        password.setAttribute("autocomplete", "current-password");
+        const form = el("form", { class: "card" }, [
+          el("h1", { text: t("title") }),
+          el("p", { class: "muted", text: t("hint") }),
+          el("label", { for: "login-user", text: t("user") }),
+          user,
+          el("label", { for: "login-password", text: t("password") }),
+          password,
+          el("button", { id: "login-submit", class: "primary", type: "submit", text: t("enter") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ username: user.value, password: password.value }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await boot();
+        });
+        login.replaceChildren(form);
+      };
+
+      const boot = async () => {
+        applyChrome();
+        const response = await api("/api/me");
+        if (!response.ok) {
+          me = null;
+          showLogin();
+          return;
+        }
+        me = response.body;
+        lang = me.settings?.language === "en" ? "en" : "pt-BR";
+        theme = me.settings?.theme === "dark" ? "dark" : "light";
+        applyChrome();
+        login.hidden = true;
+        app.hidden = false;
+        await show(view);
+      };
+
+      themeButton.addEventListener("click", async () => {
+        theme = theme === "dark" ? "light" : "dark";
+        applyChrome();
+        if (me) {
+          await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ theme }),
+          });
+        }
+      });
+      langButton.addEventListener("click", async () => {
+        lang = lang === "en" ? "pt-BR" : "en";
+        applyChrome();
+        paintNav();
+        if (me) {
+          await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ language: lang }),
+          });
+          await show(view);
+        } else showLogin();
+      });
+      logoutButton.addEventListener("click", async () => {
+        await api("/api/logout", { method: "POST" });
+        me = null;
+        view = "home";
+        showLogin();
+      });
+      setInterval(() => {
+        if (painting || !me) return;
+        if (!["home", "history", "job"].includes(view)) return;
+        painting = true;
+        render().finally(() => {
+          painting = false;
+        });
+      }, 1000);
+      boot();
+    </script>
+  </body>
+</html>
