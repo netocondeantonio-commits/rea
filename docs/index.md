@@ -61,7 +61,9 @@ For runtime instrumentation, see the [Frida guide](./frida-instrumentation.md).
 
 To run one local analysis without an agent, use
 [Análise local](analise-local.md). That page is a loopback dashboard and a
-one-shot command. It does not change the CLI or MCP server.
+one-shot command. It writes a bilingual beginner package under
+`output/<target>/` inside the analysis folder. It does not change the CLI or
+MCP server.
 
 For development, use [testing](testing.md), [client verification](client-verification.md),
 [tool design](tool-design.md), and [releasing](releasing.md).

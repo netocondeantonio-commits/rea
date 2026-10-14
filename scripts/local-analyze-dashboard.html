@@ -23,7 +23,7 @@
         color: var(--ink);
       }
       main {
-        max-width: 760px;
+        max-width: 880px;
         margin: 0 auto;
         padding: 40px 20px 64px;
       }
@@ -64,14 +64,25 @@
       pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
       a { color: var(--accent); }
       footer { color: var(--muted); font-size: 0.9rem; margin-top: 24px; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .lang { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+      .lang[aria-pressed="true"] { background: var(--accent); color: white; }
+      #artifacts { display: grid; gap: 12px; }
+      #artifacts article { margin-top: 0; }
+      #artifacts h3 { margin: 0 0 6px; font-size: 1.05rem; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Análise local</h1>
-      <p class="lede">
+      <div class="row">
+        <h1>Análise local</h1>
+        <button id="lang-pt" class="lang" type="button" aria-pressed="true">Português</button>
+        <button id="lang-en" class="lang" type="button" aria-pressed="false">English</button>
+      </div>
+      <p class="lede" id="lede">
         Cole um caminho nesta máquina ou a URL de um repositório público do GitHub.
         A análise usa a CLI do REA nesta máquina. Nenhum modelo de IA entra nesse caminho.
+        No fim, a página lista um pacote em português e inglês.
       </p>
       <form id="analyze-form">
         <label for="target">Caminho ou URL do GitHub</label>
@@ -83,8 +94,12 @@
         <p id="status" class="status">Nenhuma análise nesta sessão.</p>
         <ul id="events"></ul>
       </section>
+      <section id="artifact-wrap" hidden>
+        <h2 id="artifact-title">Pacote para quem está começando</h2>
+        <div id="artifacts"></div>
+      </section>
       <article id="report-wrap" hidden>
-        <h2>Relatório</h2>
+        <h2 id="report-title">Registro curto</h2>
         <p><a id="report-link" href="">Abrir o HTML do relatório</a></p>
         <div id="report"></div>
       </article>
@@ -101,11 +116,75 @@
       const reportWrap = document.querySelector("#report-wrap");
       const report = document.querySelector("#report");
       const reportLink = document.querySelector("#report-link");
+      const artifactWrap = document.querySelector("#artifact-wrap");
+      const artifacts = document.querySelector("#artifacts");
+      const lede = document.querySelector("#lede");
+      const artifactTitle = document.querySelector("#artifact-title");
+      const reportTitle = document.querySelector("#report-title");
+      const langPt = document.querySelector("#lang-pt");
+      const langEn = document.querySelector("#lang-en");
       let timer = 0;
+      let lang = "pt-BR";
+      let current = null;
+
+      const text = {
+        "pt-BR": {
+          lede: "Cole um caminho nesta máquina ou a URL de um repositório público do GitHub. A análise usa a CLI do REA nesta máquina. Nenhum modelo de IA entra nesse caminho. No fim, a página lista um pacote em português e inglês.",
+          artifacts: "Pacote para quem está começando",
+          report: "Registro curto",
+          open: "Abrir",
+          reportLink: "Abrir o HTML do registro curto",
+          idle: "Nenhuma análise nesta sessão.",
+          sending: "Enviando…",
+          label: "Caminho ou URL do GitHub",
+          submit: "Analisar",
+        },
+        en: {
+          lede: "Paste a path on this machine or a public GitHub repository URL. The analysis uses the REA CLI on this machine. No AI model is on this path. At the end, the page lists a package in Portuguese and English.",
+          artifacts: "Package for a first reading",
+          report: "Short log",
+          open: "Open",
+          reportLink: "Open the short-log HTML",
+          idle: "No analysis in this session.",
+          sending: "Sending…",
+          label: "Path or GitHub URL",
+          submit: "Analyze",
+        },
+      };
+
+      const renderArtifacts = (job) => {
+        artifacts.replaceChildren();
+        const list = (job?.artifacts ?? []).filter(
+          (item) => item.lang === "both" || item.lang === lang,
+        );
+        artifactWrap.hidden = list.length === 0;
+        for (const item of list) {
+          const card = document.createElement("article");
+          const heading = document.createElement("h3");
+          heading.textContent = lang === "en" ? item.title_en : item.title_pt;
+          const blurb = document.createElement("p");
+          blurb.textContent = lang === "en" ? item.blurb_en : item.blurb_pt;
+          card.append(heading, blurb);
+          if (item.href) {
+            const link = document.createElement("a");
+            link.href = item.href;
+            link.textContent = text[lang].open;
+            card.append(link);
+          }
+          if (item.markdown_href) {
+            const link = document.createElement("a");
+            link.href = item.markdown_href;
+            link.textContent = "Markdown";
+            card.append(document.createTextNode(" "), link);
+          }
+          artifacts.append(card);
+        }
+      };
 
       const render = (job) => {
+        current = job;
         status.textContent = job === null
-          ? "Nenhuma análise nesta sessão."
+          ? text[lang].idle
           : `${job.state} — ${job.detected ?? "detectando"} — ${job.target}`;
         events.replaceChildren();
         for (const event of job?.events ?? []) {
@@ -113,9 +192,11 @@
           item.textContent = event.message;
           events.append(item);
         }
+        renderArtifacts(job);
         if (job?.state === "done" || job?.state === "failed") {
           reportWrap.hidden = false;
           reportLink.href = `/reports/${job.id}`;
+          reportLink.textContent = text[lang].reportLink;
           report.replaceChildren();
           const heading = document.createElement("p");
           heading.textContent = job.headline ?? "";
@@ -156,11 +237,27 @@
       };
       resume();
 
+      const applyLanguage = (next) => {
+        lang = next;
+        langPt.setAttribute("aria-pressed", lang === "pt-BR" ? "true" : "false");
+        langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
+        document.documentElement.lang = lang === "en" ? "en" : "pt-BR";
+        lede.textContent = text[lang].lede;
+        artifactTitle.textContent = text[lang].artifacts;
+        reportTitle.textContent = text[lang].report;
+        document.querySelector("label[for='target']").textContent = text[lang].label;
+        submit.textContent = text[lang].submit;
+        render(current);
+      };
+      langPt.addEventListener("click", () => applyLanguage("pt-BR"));
+      langEn.addEventListener("click", () => applyLanguage("en"));
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         submit.disabled = true;
         reportWrap.hidden = true;
-        status.textContent = "Enviando…";
+        artifactWrap.hidden = true;
+        status.textContent = text[lang].sending;
         const response = await fetch("/api/analyze", {
           method: "POST",
           headers: { "content-type": "application/json" },

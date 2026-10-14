@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { safeChildPath } from "./local-analyze-text.mjs";
 
 const send = (response, status, body, type) => {
   response.writeHead(status, {
@@ -38,6 +39,47 @@ const targetFrom = (raw) => {
   return { target };
 };
 
+const contentType = (file) => {
+  if (file.endsWith(".html")) return "text/html; charset=utf-8";
+  if (file.endsWith(".json")) return "application/json";
+  if (file.endsWith(".svg")) return "image/svg+xml";
+  if (file.endsWith(".md") || file.endsWith(".txt") || file.endsWith(".mmd"))
+    return "text/plain; charset=utf-8";
+  return undefined;
+};
+
+const sendPackage = async (response, job, relative) => {
+  if (job?.package_slug === undefined) {
+    send(response, 404, "pacote ainda não existe", "text/plain; charset=utf-8");
+    return;
+  }
+  const root = join(job.directory, "output", job.package_slug);
+  const file = safeChildPath(root, relative);
+  const type = file === undefined ? undefined : contentType(file);
+  if (file === undefined || type === undefined) {
+    send(response, 404, "não encontrado", "text/plain; charset=utf-8");
+    return;
+  }
+  try {
+    send(response, 200, await readFile(file), type);
+  } catch {
+    send(response, 404, "não encontrado", "text/plain; charset=utf-8");
+  }
+};
+
+const servePackageRoute = async (url, request, response, jobs) => {
+  if (request.method !== "GET") return false;
+  const nested = /^\/packages\/([A-Za-z0-9-]+)\/(.+)$/u.exec(url.pathname);
+  if (nested !== null) {
+    await sendPackage(response, jobs.get(nested[1]), nested[2]);
+    return true;
+  }
+  const root = /^\/packages\/([A-Za-z0-9-]+)\/?$/u.exec(url.pathname);
+  if (root === null) return false;
+  await sendPackage(response, jobs.get(root[1]), "index.html");
+  return true;
+};
+
 const busy = (jobs) =>
   [...jobs.values()].some(
     (job) => job.state === "running" || job.state === "queued",
@@ -71,6 +113,7 @@ const handleRequest = async ({
     json(response, 200, job);
     return;
   }
+  if (await servePackageRoute(url, request, response, jobs)) return;
   const reportMatch = /^\/reports\/([A-Za-z0-9-]+)$/u.exec(url.pathname);
   if (request.method === "GET" && reportMatch !== null) {
     const job = jobs.get(reportMatch[1]);

@@ -63,6 +63,26 @@ Nenhuma chave de API é necessária.
 
 Hopper e IDA não são instalados por este comando. Se quiser usá-los, configure-os à parte e chame a CLI diretamente.
 
+## Pacote em português e inglês
+
+No fim da análise, a pasta da execução ganha `output/<nome-do-alvo>/`. O nome é o do arquivo ou da pasta, com caracteres estranhos trocados por hífen. O painel lista esses arquivos com uma frase curta para cada um. Dá para alternar o idioma do painel entre português e inglês.
+
+| Arquivo                                                     | O que é                                                                                                                                              |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `README.pt-BR.md` e `README.en.md`                          | Por onde começar, o que foi lido e a ordem dos outros arquivos. Há um HTML com o mesmo texto.                                                        |
+| `overview.*.md`                                             | Módulos, ponto de entrada, bibliotecas declaradas e os comandos que o próprio `package.json` escreveu.                                               |
+| `architecture.*.md`, `architecture.svg`, `architecture.mmd` | Mapa das partes e ligações que os motores registraram. A imagem abre direto. O `.mmd` é o mesmo mapa em Mermaid.                                     |
+| `openapi.json` e `openapi.*.md`                             | Contrato OpenAPI. Se nenhuma rota HTTP foi achada no texto nem no JSON, o contrato fica vazio e a página explica isso. Nenhuma requisição é enviada. |
+| `findings.*.md`                                             | Contagens e avisos copiados do motor. Não é um certificado de segurança.                                                                             |
+| `tools.*.md`                                                | O que REA, Ghidra, JADX, objdump, Rizin, Frida, GhidraMCP, GDB e o doctor fizeram. Frida e GDB não são executados neste caminho.                     |
+| `glossary.*.md`                                             | Glossário curto.                                                                                                                                     |
+| `doctor.json` e `doctor.*.md`                               | Prontidão das ferramentas nesta máquina, não uma análise do alvo.                                                                                    |
+| `strings.txt` e `strings.*.md`                              | Trechos de texto encontrados. Não são classificados como segredo.                                                                                    |
+| `evidence/`                                                 | Cópia do JSON original da CLI.                                                                                                                       |
+| `index.html`                                                | As duas línguas lado a lado, com os mesmos links.                                                                                                    |
+
+O texto é montado por regras a partir dos arquivos e do JSON. Nenhum modelo escreve esse pacote. Se um campo não veio no alvo, a página diz que ele não foi declarado.
+
 ## O que não muda
 
 `npm start` continua sendo o servidor MCP por stdio. `rea setup` não chama este painel. Um produto separado, se existir, fica em outro repositório e não faz parte daqui.

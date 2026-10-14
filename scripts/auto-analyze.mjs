@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { startLocalDashboard } from "./local-analyze-http.mjs";
+import { writeLocalPackage } from "./local-analyze-package.mjs";
+import { writeLocalReport } from "./local-analyze-report.mjs";
 
 /**
  * Local operator helper. It shells out to the existing REA CLI, writes a
@@ -30,6 +32,7 @@ const help = () => {
 
 Opções: --serve  --no-serve  --port <n>  --output <dir>
 O padrão escuta só em 127.0.0.1. Sem --no-serve, o processo fica no painel.
+Cada execução também grava um pacote bilíngue em output/<alvo>/.
 `,
   );
 };
@@ -229,12 +232,6 @@ const factsFrom = (value) => {
   return facts.slice(0, 8);
 };
 
-const escapeHtml = (value) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
 const planSteps = async (kind, path) => {
   if (kind === "javascript")
     return [
@@ -307,13 +304,20 @@ const planNative = async (path, notes) => {
       args: ["inspect-with-objdump", path, "file_headers"],
       timeoutMs: 60_000,
     });
-  if (await commandExists(process.env.REA_RIZIN_COMMAND ?? "rizin"))
+  if (await commandExists(process.env.REA_RIZIN_COMMAND ?? "rizin")) {
     steps.push({
       id: "rizin",
       title: "Rizin",
       args: ["execute-rizin-command", path, "iI"],
       timeoutMs: 60_000,
     });
+    steps.push({
+      id: "rizin-strings",
+      title: "Rizin strings",
+      args: ["execute-rizin-command", path, "iz"],
+      timeoutMs: 60_000,
+    });
+  }
   if ((process.env.GHIDRA_INSTALL_DIR ?? "").length > 0)
     steps.push({
       id: "ghidra",
@@ -330,51 +334,32 @@ const planNative = async (path, notes) => {
   return steps;
 };
 
-const writeReport = async (job) => {
-  const lines = [
-    "# Relatório local",
-    "",
-    `Alvo: ${job.target}`,
-    `Tipo: ${job.detected}`,
-    `Pasta: ${job.directory}`,
-    "",
-    "Esta execução não chamou um modelo. Ela só rodou a CLI do REA.",
-    "",
-  ];
-  for (const step of job.steps) {
-    lines.push(`## ${step.title}`, "");
-    if (step.skip !== undefined) {
-      lines.push(step.skip, "");
-      continue;
-    }
-    lines.push(step.ok ? "Concluído." : "Falhou.", "");
-    for (const fact of step.facts ?? []) lines.push(`- ${fact}`);
-    if ((step.facts ?? []).length > 0) lines.push("");
-    if (step.stderr && !step.ok) {
-      lines.push("```text", clip(step.stderr, 2000), "```", "");
-    }
+const persist = async (job) => {
+  try {
+    await writeLocalPackage(job, { runRea, commandExists });
+  } catch (cause) {
+    job.events.push({
+      message: `Pacote bilíngue não foi escrito: ${cause instanceof Error ? cause.message : cause}`,
+    });
   }
-  lines.push("## Evidência", "");
-  lines.push(
-    "Os JSON completos ficam ao lado deste relatório, na pasta evidence.",
-    "",
+  await writeLocalReport(job);
+  await writeFile(
+    join(job.directory, "job.json"),
+    JSON.stringify(job, null, 2),
   );
-  const markdown = `${lines.join("\n")}\n`;
-  const html = `<!doctype html><html lang="pt-BR"><meta charset="utf-8" /><title>Relatório local</title><pre>${escapeHtml(markdown)}</pre></html>\n`;
-  await writeFile(join(job.directory, "report.md"), markdown);
-  await writeFile(join(job.directory, "report.html"), html);
-  job.report_markdown = markdown;
-  job.headline = job.steps.some((step) => step.ok)
-    ? "Relatório pronto."
-    : "Relatório escrito. Nenhum comando de análise concluiu.";
 };
 
 const failJob = async (job, detected, message, note) => {
-  job.state = "failed";
   job.detected = detected;
   note(message);
+  note("Escrevendo o pacote em português e inglês");
   await mkdir(job.directory, { recursive: true });
-  await writeReport(job);
+  await persist(job);
+  job.state = "failed";
+  await writeFile(
+    join(job.directory, "job.json"),
+    JSON.stringify(job, null, 2),
+  );
 };
 
 const githubRejected = (owner, repo) =>
@@ -471,7 +456,8 @@ const analyze = async (job, onUpdate) => {
     );
     note(result.ok ? `${step.title} concluído` : `${step.title} falhou`);
   }
-  await writeReport(job);
+  note("Escrevendo o pacote em português e inglês");
+  await persist(job);
   job.state = job.steps.some((step) => step.ok) ? "done" : "failed";
   await writeFile(
     join(job.directory, "job.json"),
@@ -519,8 +505,12 @@ if (options.target !== undefined) {
   const job = createJob(options.output, options.target);
   jobs.set(job.id, job);
   await analyze(job, () => {});
+  const packageReadme =
+    job.package_slug === undefined
+      ? ""
+      : `${join(job.directory, "output", job.package_slug, "README.pt-BR.md")}\n`;
   process.stderr.write(
-    `${job.headline}\n${join(job.directory, "report.md")}\n`,
+    `${job.headline}\n${join(job.directory, "report.md")}\n${packageReadme}`,
   );
   if (!options.serve) process.exit(job.state === "done" ? 0 : 1);
 }
