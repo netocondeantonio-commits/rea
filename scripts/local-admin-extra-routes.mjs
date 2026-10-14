@@ -1,10 +1,12 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { targetWrite } from "./local-admin-access.mjs";
 import {
   acceptedEngines,
   diffDirectories,
   searchJobs,
 } from "./local-admin-extra.mjs";
+import { postUpload } from "./local-admin-upload.mjs";
 import {
   renderTemplate,
   shareDocument,
@@ -104,7 +106,10 @@ export const postShare = async (ctx, id) => {
     token: share.token,
     path: `/r/${share.token}`,
     expiresAt: new Date(share.exp).toISOString(),
-    loopbackOnly: true,
+    loopbackOnly:
+      ctx.options.host === undefined ||
+      ctx.options.host === "127.0.0.1" ||
+      ctx.options.host === "::1",
   });
 };
 
@@ -142,6 +147,21 @@ export const patchTarget = async (ctx, id) => {
     fail(ctx.response, 400, "JSON inválido.", "Invalid JSON.");
     return;
   }
+  const current = ctx.admin.listTargets().find((item) => item.id === id);
+  const access = targetWrite(ctx.actor, current);
+  if (access === "missing") {
+    fail(ctx.response, 404, "Alvo não encontrado.", "Target not found.");
+    return;
+  }
+  if (access === "forbidden") {
+    fail(
+      ctx.response,
+      403,
+      "Só um administrador altera um alvo compartilhado.",
+      "Only an administrator can change a shared target.",
+    );
+    return;
+  }
   const result = await ctx.admin.patchTarget(id, body);
   if (result.error) {
     fail(ctx.response, 400, result.error, result.error_en ?? result.error);
@@ -152,6 +172,7 @@ export const patchTarget = async (ctx, id) => {
 };
 
 export const extraRoutes = [
+  { method: "POST", pattern: /^\/api\/upload$/u, role: "any", run: postUpload },
   { method: "POST", pattern: /^\/api\/diff$/u, role: "any", run: postDiff },
   { method: "GET", pattern: /^\/api\/search$/u, role: "any", run: getSearch },
   {

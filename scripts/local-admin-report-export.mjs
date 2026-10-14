@@ -1,4 +1,8 @@
-/** PDF, webhook body, and the loopback share page. No model is called. */
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import { isPrivateAddress, publicHttpUrl } from "./local-admin-access.mjs";
+
+/** PDF, webhook body, and the read-only share page. No model is called. */
 
 const CERT_EN =
   "This is not an OWASP certificate and does not mean the program is safe.";
@@ -148,14 +152,15 @@ const webhookBody = (host, summary, job, chatId) => {
   return body;
 };
 
+const hostIsPublic = async (hostname) => {
+  if (isIP(hostname) !== 0) return !isPrivateAddress(hostname);
+  const records = await lookup(hostname, { all: true });
+  return records.every((row) => !isPrivateAddress(row.address));
+};
+
 export const webhookRequest = (rawUrl, job, chatId) => {
-  let url;
-  try {
-    url = new URL(String(rawUrl ?? ""));
-  } catch {
-    return undefined;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+  const url = publicHttpUrl(rawUrl);
+  if (!url) return undefined;
   const summary =
     `REA ${job?.state ?? ""} ${job?.id ?? ""} ${job?.target ?? ""}`.slice(
       0,
@@ -170,6 +175,12 @@ export const webhookRequest = (rawUrl, job, chatId) => {
 export const deliverWebhook = async (rawUrl, job, chatId) => {
   const request = webhookRequest(rawUrl, job, chatId);
   if (!request) return { status: 0 };
+  try {
+    if (!(await hostIsPublic(new URL(request.url).hostname)))
+      return { status: 0 };
+  } catch {
+    return { status: 0 };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
@@ -217,5 +228,5 @@ export const shareDocument = (job, token) => {
         `<li>${escapeHtml(item.status)}: ${escapeHtml(item.observation)}</li>`,
     )
     .join("");
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>REA</title></head><body><p>Este endereço só responde em 127.0.0.1. Não é um link público na internet.</p><p>${escapeHtml(job?.target ?? "")}</p><p>${escapeHtml(CERT_PT)}</p><ul>${items}</ul><ul>${shareLinks(job, token)}</ul><p><a href="/r/${token}/pkg/hashes.sha256">hashes.sha256</a></p></body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>REA</title></head><body><p>Este endereço usa um token. No padrão ele só responde em 127.0.0.1. Quem publica o painel torna o token um link de capacidade.</p><p>${escapeHtml(job?.target ?? "")}</p><p>${escapeHtml(CERT_PT)}</p><ul>${items}</ul><ul>${shareLinks(job, token)}</ul><p><a href="/r/${token}/pkg/hashes.sha256">hashes.sha256</a></p></body></html>`;
 };

@@ -64,8 +64,9 @@ To run one local analysis without an agent, use
 one-shot command. It writes a bilingual beginner package under
 `output/<target>/` inside the analysis folder. English setup for the local
 admin login, queue, and export is in [Local admin](local-admin.md). That
-page also describes diff, search, PDF templates, schedules, and the license
-notes for a paid service. It does not change the CLI or MCP server.
+page also describes diff, search, PDF templates, schedules, deploy without
+billing, and the license notes for companion tools. It does not change the
+CLI or MCP server.
 
 For development, use [testing](testing.md), [client verification](client-verification.md),
 [tool design](tool-design.md), and [releasing](releasing.md).

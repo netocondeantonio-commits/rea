@@ -15,6 +15,16 @@ export const readSessionToken: (
   token: string | undefined,
 ) => { user: string; role?: string; exp: number } | undefined;
 
+export const signJwt: (
+  secret: string,
+  payload: { user: string; role: string; exp: number },
+) => string;
+
+export const readJwt: (
+  secret: string,
+  token: string | undefined,
+) => { user: string; role?: string; exp: number } | undefined;
+
 export const bearerMatches: (
   header: string | undefined,
   token: string | undefined,

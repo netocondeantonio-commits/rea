@@ -15,6 +15,7 @@ export interface DashboardJob {
 export const startLocalDashboard: (input: {
   options: {
     port: number;
+    host?: string;
     output: string;
     baseOutput?: string;
     adminDirectory?: string;

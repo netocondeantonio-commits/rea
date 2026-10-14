@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { demoAllowsTarget } from "./local-admin-access.mjs";
 import { attachEvidence, gateFast } from "./local-admin-extra.mjs";
+import { setSandboxJob } from "./local-admin-sandbox.mjs";
 import { downloadPinned, pinnedDigest } from "./local-admin-pins.mjs";
 import {
   mergedEnv,
@@ -221,6 +223,15 @@ const runAnalysis = async (job, onUpdate) => {
     await markCancelled(job, note);
     return;
   }
+  if (!demoAllowsTarget(job.target, join(dirname(job.directory), "uploads"))) {
+    await failJob(
+      job,
+      "demo",
+      "No modo demo só valem upload, GitHub ou o APK fixado.",
+      note,
+    );
+    return;
+  }
   job.state = "running";
   await saveIndex(job);
   const source = await resolveSource(job, note);
@@ -268,9 +279,11 @@ const runAnalysis = async (job, onUpdate) => {
 
 export const analyze = async (job, onUpdate) => {
   setResourceLimits({ cpuNice: job.cpuNice ?? 0 });
+  setSandboxJob(job);
   try {
     await runAnalysis(job, onUpdate);
   } finally {
     setResourceLimits({ cpuNice: 0 });
+    setSandboxJob(undefined);
   }
 };

@@ -14,6 +14,9 @@ export interface AdminSettings {
   telegramChatId: string;
   cpuNice: number;
   ramLimitMb: number;
+  sandbox: boolean;
+  sandboxImage: string;
+  sandboxCpus: number;
 }
 
 export interface LocalAdmin {
@@ -44,6 +47,7 @@ export interface LocalAdmin {
     kind?: string;
     note_pt?: string;
     note_en?: string;
+    owner?: string;
   }) => Promise<{ error?: string; error_en?: string }>;
   removeTarget: (id: string) => Promise<{ ok?: boolean }>;
   patchTarget: (
@@ -69,6 +73,9 @@ export interface LocalAdmin {
       telegramChatId?: string;
       cpuNice?: number;
       ramLimitMb?: number;
+      sandbox?: boolean;
+      sandboxImage?: string;
+      sandboxCpus?: number;
     },
     role: string,
   ) => Promise<AdminSettings>;

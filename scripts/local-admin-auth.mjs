@@ -49,6 +49,39 @@ export const readSessionToken = (secret, token) => {
   }
 };
 
+const encode = (value) => Buffer.from(value).toString("base64url");
+
+export const signJwt = (secret, payload) => {
+  const header = encode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = encode(JSON.stringify(payload));
+  const mac = createHmac("sha256", secret)
+    .update(`${header}.${body}`)
+    .digest("base64url");
+  return `${header}.${body}.${mac}`;
+};
+
+export const readJwt = (secret, token) => {
+  const parts = String(token ?? "").split(".");
+  if (parts.length !== 3) return undefined;
+  const [header, body, mac] = parts;
+  const expected = createHmac("sha256", secret)
+    .update(`${header}.${body}`)
+    .digest("base64url");
+  const left = Buffer.from(mac);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !timingSafeEqual(left, right))
+    return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!payload || typeof payload.user !== "string") return undefined;
+    if (typeof payload.exp !== "number" || payload.exp < Date.now())
+      return undefined;
+    return payload;
+  } catch {
+    return undefined;
+  }
+};
+
 export const bearerMatches = (header, token) => {
   if (typeof token !== "string" || token.length < 16) return false;
   const expected = Buffer.from(`Bearer ${token}`);

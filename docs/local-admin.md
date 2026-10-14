@@ -2,10 +2,10 @@
 
 This page is the English setup for the loopback admin that
 [Análise local](analise-local.md) describes in Portuguese. It runs on your
-machine, without Cursor, Claude, or any other model. It is not a hosted
-service, and it does not add accounts, billing, or multiple tenants. The REA
-CLI and MCP server stay as they are. The script only calls the CLI that
-already exists.
+machine, without Cursor, Claude, or any other model. It listens on
+`127.0.0.1` unless you bind another address for a reverse proxy. There is no
+billing or checkout. There are users and roles. The REA CLI and MCP server
+stay as they are. The script only calls the CLI that already exists.
 
 The public site in `website/` does not include this page. The HTML lives in
 `scripts/local-analyze-dashboard.html` and is served only when you ask.
@@ -80,19 +80,21 @@ The same loopback process, still with no model, can:
 
 - Diff two finished jobs: `hashes.sha256`, `strings.txt`, and OpenAPI paths. Added and removed lines are capped.
 - Repeat a saved target every N minutes (15 minimum) while the page process stays up. The timer stops when the process stops. A webhook and an audit row are written only when the manifest SHA-256 changes. The first run only stores the digest.
-- Queue with low, normal, and high priority. A running job is not preempted. `nice` 0–19 is applied to the child when the `nice` binary exists. A requested RAM number is stored and shown. **TODO:** there is no cgroup, so that RAM number is not enforced.
+- Queue with low, normal, and high priority. A running job is not preempted. `nice` 0–19 is applied to the child when the `nice` binary exists and the sandbox is off. Without the sandbox, a RAM number is only shown. With the Docker sandbox, `--memory` and `--cpus` are the cgroup.
 - Write `hashes.sha256` for the evidence files. When the local admin secret has at least 16 characters, `signature.txt` is an HMAC-SHA256 of that manifest. It is a local integrity tag, not a public code-signing certificate.
 - Show an observation checklist with green, amber, and red. Red is an engine step that failed. Routes, Android permission names, and `http://` URLs are copied from files already on disk. This is not an OWASP certificate and it does not mean the program is safe.
 - Search `.txt`, `.json`, and `.md` evidence for strings, routes, and `android.permission` names.
 - Export client, internal, and CTF PDFs. The CTF template does not invent a flag or a solution. The font covers common Portuguese letters; other characters become `?`.
 - POST an optional webhook when a manual job finishes. Discord hosts receive `{content}`. `api.telegram.org` receives `{text}` plus `chat_id` when that field is set. Any other `http` or `https` URL receives `{event, job}`. The audit log stores the HTTP status, not the URL. A Telegram bot token lives in the path; do not commit it.
-- Mint a read-only `/r/<token>` link for about seven days. **It answers only on 127.0.0.1.** It is not an internet address.
+- Mint a read-only `/r/<token>` link for about seven days. The token is the read capability. By default the page listens on 127.0.0.1. If you publish the page, anyone with the token can read that report.
 - Export and import engine configuration. Keys outside the engine list, including `PATH` and `LD_PRELOAD`, are dropped.
 - Run a fast mode for JavaScript and static sites. That mode does not call Ghidra or JADX. For an APK, a native file, or .NET it records a skip and does not call those engines.
 
-**TODO:** Docker sandbox mode is not enabled. This repository does not ship a maintained image, and the page does not start Docker or run the target in a container.
+The Docker sandbox starts off. Turn it on with `REA_SANDBOX=1` or the admin setting. This repository does not download a `rea-sandbox:local` image; `deploy/Dockerfile.sandbox` shows how to build one. If the sandbox is on and `docker` is missing, the analysis does not run on the host. Frida stays presence only. Apktool is not a pipeline step.
 
-## License and a paid service
+APK and binary uploads land in `output/uploads/<user>/`, with a size cap and a content check. API role `user` is stored as a non-admin user. An administrator sees every analysis. Another user gets 404 for someone else's analysis. `GET /api/health`, `GET /api/openapi.json`, and `GET /api/docs` describe the API. `REA_DEMO=1` allows only an upload, GitHub, or the pinned APK.
+
+## License and hosting without billing
 
 This is not legal advice. It only points at files in this repository.
 
@@ -104,9 +106,9 @@ Ghidra, JADX, jadx-headless-mcp, and Apktool are recorded as Apache-2.0. Redistr
 
 Rizin and GhidraMCP are not in the repository license table. From that inventory the answer is `NOT_ENOUGH_INFO`. A caller-supplied OpenJDK is GPLv2 with the Classpath exception. Node.js is MIT.
 
-A paid product, if you build one, stays in another repository. This page was not turned into a hosted service. Doing that would have to satisfy each license above, especially the IDA, Hopper, and JEB EULAs and the copyleft pieces in Frida, GDB, and Ghidra's GPL modules.
+This page can be published behind a proxy, with no plans, billing, Stripe, or checkout. That does not grant IDA, Hopper, or JEB rights, and it does not relicense GPL or LGPL pieces. Rizin and GhidraMCP remain outside the table (`NOT_ENOUGH_INFO`).
 
 ## What does not change
 
 `npm start` is still the stdio MCP server. `rea setup` does not open this
-page. A separate product, if you build one, belongs in another repository.
+page. There is no checkout. Optional deploy notes are in `deploy/README.md`.

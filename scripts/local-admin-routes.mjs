@@ -1,13 +1,21 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  guardJobs,
+  prepareHeaders,
+  rejectIfLimited,
+} from "./local-admin-access.mjs";
+import {
   bearerMatches,
   loginAllowed,
   noteLogin,
   parseCookies,
+  readJwt,
   readSessionToken,
+  signJwt,
   signSession,
 } from "./local-admin-auth.mjs";
+import { answerPublic, pipelineMap } from "./local-admin-openapi.mjs";
 import {
   deleteTarget,
   deleteUser,
@@ -42,19 +50,38 @@ const contentType = (file) => {
   return undefined;
 };
 
-const identify = (request, admin) => {
-  if (bearerMatches(request.headers.authorization, process.env.REA_ADMIN_TOKEN))
-    return { user: "api-token", role: "operator" };
-  const payload = readSessionToken(
-    admin.secret,
-    parseCookies(request.headers.cookie).rea_session,
-  );
+const sessionCookie = (token, maxAge) => {
+  const secure = process.env.REA_COOKIE_SECURE === "1" ? "; Secure" : "";
+  return `rea_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+};
+
+const actorFromPayload = (admin, payload) => {
   if (!payload) return undefined;
   const user = admin
     .listUsers()
     .find((item) => item.username === payload.user && !item.disabled);
   if (!user) return undefined;
   return { user: user.username, role: user.role };
+};
+
+const identify = (request, admin) => {
+  const header = String(request.headers.authorization ?? "");
+  if (bearerMatches(header, process.env.REA_ADMIN_TOKEN))
+    return { user: "api-token", role: "operator" };
+  if (header.startsWith("Bearer ")) {
+    const jwt = actorFromPayload(
+      admin,
+      readJwt(admin.secret, header.slice(7).trim()),
+    );
+    if (jwt) return jwt;
+  }
+  return actorFromPayload(
+    admin,
+    readSessionToken(
+      admin.secret,
+      parseCookies(request.headers.cookie).rea_session,
+    ),
+  );
 };
 
 const postLogin = async (ctx) => {
@@ -81,28 +108,30 @@ const postLogin = async (ctx) => {
     );
     return;
   }
+  const exp = Date.now() + SESSION_MS;
   const token = signSession(ctx.admin.secret, {
     user: user.username,
     role: user.role,
-    exp: Date.now() + SESSION_MS,
+    exp,
   });
-  ctx.response.setHeader(
-    "set-cookie",
-    `rea_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`,
-  );
+  ctx.response.setHeader("set-cookie", sessionCookie(token, 43200));
   await ctx.admin.audit({
     user: user.username,
     action: "login",
     detail: "session",
   });
-  json(ctx.response, 200, { user });
+  json(ctx.response, 200, {
+    user,
+    token: signJwt(ctx.admin.secret, {
+      user: user.username,
+      role: user.role,
+      exp,
+    }),
+  });
 };
 
 const postLogout = async (ctx) => {
-  ctx.response.setHeader(
-    "set-cookie",
-    "rea_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
-  );
+  ctx.response.setHeader("set-cookie", sessionCookie("", 0));
   await ctx.admin.audit({
     user: ctx.actor.user,
     action: "logout",
@@ -116,10 +145,17 @@ const getMe = async (ctx) => {
   json(ctx.response, 200, {
     user: { username: ctx.actor.user, role: ctx.actor.role },
     settings: { language: settings.language, theme: settings.theme },
+    demo: process.env.REA_DEMO === "1",
+    sandbox: process.env.REA_SANDBOX === "1" || settings.sandbox === true,
   });
 };
 
+const getMap = async (ctx) => {
+  json(ctx.response, 200, pipelineMap());
+};
+
 const ROUTES = [
+  { method: "GET", pattern: /^\/api\/map$/u, role: "any", run: getMap },
   { method: "POST", pattern: /^\/api\/logout$/u, role: "any", run: postLogout },
   { method: "GET", pattern: /^\/api\/me$/u, role: "any", run: getMe },
   { method: "GET", pattern: /^\/api\/home$/u, role: "any", run: getHome },
@@ -276,7 +312,9 @@ const serveReport = async (ctx, url) => {
 };
 
 export const handleRequest = async (ctx) => {
+  prepareHeaders(ctx);
   const url = new URL(ctx.request.url ?? "/", "http://127.0.0.1");
+  if (answerPublic(ctx, url)) return;
   if (ctx.request.method === "GET" && url.pathname === "/favicon.ico") {
     send(ctx.response, 204, "", "text/plain");
     return;
@@ -285,6 +323,7 @@ export const handleRequest = async (ctx) => {
     send(ctx.response, 200, ctx.dashboard, "text/html; charset=utf-8");
     return;
   }
+  if (rejectIfLimited(ctx, url.pathname)) return;
   if (ctx.request.method === "POST" && url.pathname === "/api/login") {
     await postLogin(ctx);
     return;
@@ -295,8 +334,9 @@ export const handleRequest = async (ctx) => {
     fail(ctx.response, 401, "Entre para continuar.", "Sign in to continue.");
     return;
   }
-  if (await dispatch({ ...ctx, actor }, url)) return;
-  if (await servePackage({ ...ctx, actor }, url)) return;
-  if (await serveReport({ ...ctx, actor }, url)) return;
+  const scoped = { ...ctx, actor, jobs: guardJobs(ctx.jobs, actor) };
+  if (await dispatch(scoped, url)) return;
+  if (await servePackage(scoped, url)) return;
+  if (await serveReport(scoped, url)) return;
   send(ctx.response, 404, "não encontrado", "text/plain; charset=utf-8");
 };

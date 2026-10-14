@@ -104,6 +104,7 @@
       <header>
         <strong>REA</strong>
         <nav id="nav"></nav>
+        <p id="demo" class="warn" hidden></p>
         <div class="tools">
           <button id="theme" type="button"></button>
           <button id="lang" type="button"></button>
@@ -116,7 +117,7 @@
       const copy = {
         "pt-BR": {
           title: "Administração local",
-          hint: "Usuário e senha vêm deste computador. A página só escuta em 127.0.0.1. Nenhum modelo entra nesse caminho.",
+          hint: "Usuário e senha vêm deste computador. Por padrão a página escuta em 127.0.0.1. Atrás de um proxy, use outro endereço sem as portas 80 e 443. Nenhum modelo entra nesse caminho.",
           user: "Usuário",
           password: "Senha",
           enter: "Entrar",
@@ -179,7 +180,7 @@
           tokenOff: "Sem token. Defina REA_ADMIN_TOKEN (16 caracteres ou mais) e reinicie o painel.",
           role: "Papel",
           admin: "administrador",
-          operator: "operador",
+          operator: "usuário",
           create: "Criar usuário",
           disable: "Desativar",
           enable: "Ativar",
@@ -193,7 +194,7 @@
           done: "concluída",
           failed: "falhou",
           cancelled: "cancelada",
-          footer: "Painel só neste computador. Não é um serviço hospedado. A CLI e o MCP do REA continuam iguais.",
+          footer: "Sem planos nem cobrança. A CLI e o MCP do REA continuam iguais. Licenças de IDA, Hopper, JEB e das peças GPL continuam valendo.",
           saved: "Guardado.",
           error: "Não foi possível concluir.",
           compare: "Comparar",
@@ -203,10 +204,10 @@
           normal: "normal",
           high: "alta",
           fast: "Modo rápido (só JavaScript ou site)",
-          limitsNote: "O modo sandbox Docker não está habilitado. Um número de RAM é só um pedido: esta página não aplica cgroup.",
+          limitsNote: "O sandbox Docker começa desligado. Ligado, RAM e CPU usam cgroup do Docker. Se o docker faltar, a análise não roda no computador.",
           checklist: "Lista de observações",
           signatureHint: "A assinatura é uma etiqueta HMAC local. Não é um certificado público.",
-          ramNote: "O limite de RAM pedido não é aplicado com cgroup.",
+          ramNote: "Sem sandbox, o número de RAM só é mostrado. Com sandbox, o Docker aplica --memory e --cpus.",
           share: "Link só neste computador",
           shareHint: "O endereço funciona enquanto este painel estiver aberto, só em 127.0.0.1, por cerca de 7 dias.",
           client: "PDF cliente",
@@ -217,11 +218,20 @@
           webhook: "Webhook (Discord, Telegram ou JSON)",
           chat: "chat_id do Telegram",
           nice: "nice do processo (0 a 19)",
-          ram: "RAM pedida em MB (não aplicada)",
+          ram: "RAM em MB (cgroup só com sandbox Docker)",
           exportEngines: "Exportar motores",
           importEngines: "Importar motores",
           notEnabled: "Ainda não habilitado",
-          dockerNote: "Sandbox Docker: não habilitado. Não há imagem mantida e o alvo não é executado num contêiner.",
+          dockerNote: "Sandbox Docker desligado. A análise roda neste computador e o número de RAM não é um cgroup.",
+          dockerOn: "Sandbox Docker ligado. RAM e CPU usam --memory e --cpus. Sem o comando docker, a análise não roda aqui.",
+          systemMap: "Mapa do sistema",
+          apiDocs: "Documentação da API",
+          noBilling: "Sem planos nem cobrança.",
+          upload: "Enviar APK ou binário",
+          demoBanner: "Modo demo: só upload, GitHub ou o APK fixado.",
+          sandbox: "Sandbox Docker",
+          sandboxImage: "Imagem Docker",
+          cpus: "CPUs do sandbox (1 a 4)",
           query: "Texto",
           find: "Procurar",
           left: "Versão A",
@@ -231,7 +241,7 @@
         },
         en: {
           title: "Local admin",
-          hint: "The user and password come from this computer. The page listens only on 127.0.0.1. No model is on this path.",
+          hint: "The user and password come from this computer. The page listens on 127.0.0.1 unless you set another address. Ports 80 and 443 stay with the proxy. No model is on this path.",
           user: "User",
           password: "Password",
           enter: "Sign in",
@@ -294,7 +304,7 @@
           tokenOff: "No token. Set REA_ADMIN_TOKEN (16 characters or more) and restart the page.",
           role: "Role",
           admin: "administrator",
-          operator: "operator",
+          operator: "user",
           create: "Create user",
           disable: "Disable",
           enable: "Enable",
@@ -308,7 +318,7 @@
           done: "done",
           failed: "failed",
           cancelled: "cancelled",
-          footer: "This page stays on this computer. It is not a hosted service. The REA CLI and MCP stay the same.",
+          footer: "No plans and no billing. The REA CLI and MCP stay the same. IDA, Hopper, JEB, and GPL terms still apply.",
           saved: "Saved.",
           error: "That did not finish.",
           compare: "Compare",
@@ -318,10 +328,10 @@
           normal: "normal",
           high: "high",
           fast: "Fast mode (JavaScript or site only)",
-          limitsNote: "Docker sandbox mode is not enabled. A RAM number is only a request: this page does not apply a cgroup.",
+          limitsNote: "The Docker sandbox starts off. When on, RAM and CPU use Docker cgroups. If docker is missing, the analysis does not run on this computer.",
           checklist: "Observation list",
           signatureHint: "The signature is a local HMAC tag. It is not a public certificate.",
-          ramNote: "The requested RAM cap is not enforced with a cgroup.",
+          ramNote: "Without the sandbox, the RAM number is only shown. With the sandbox, Docker applies --memory and --cpus.",
           share: "Link on this computer only",
           shareHint: "The address works while this page is open, only on 127.0.0.1, for about 7 days.",
           client: "Client PDF",
@@ -332,11 +342,20 @@
           webhook: "Webhook (Discord, Telegram, or JSON)",
           chat: "Telegram chat_id",
           nice: "Process nice (0 to 19)",
-          ram: "Requested RAM MB (not enforced)",
+          ram: "RAM MB (cgroup only with the Docker sandbox)",
           exportEngines: "Export engines",
           importEngines: "Import engines",
           notEnabled: "Not enabled",
-          dockerNote: "Docker sandbox: not enabled. There is no maintained image, and the target is not run in a container.",
+          dockerNote: "Docker sandbox is off. Analysis runs on this computer and the RAM number is not a cgroup.",
+          dockerOn: "Docker sandbox is on. RAM and CPU use --memory and --cpus. If docker is missing, analysis does not run here.",
+          systemMap: "System map",
+          apiDocs: "API docs",
+          noBilling: "No plans and no billing.",
+          upload: "Upload an APK or binary",
+          demoBanner: "Demo mode: uploads, GitHub, or the pinned APK only.",
+          sandbox: "Docker sandbox",
+          sandboxImage: "Docker image",
+          cpus: "Sandbox CPUs (1 to 4)",
           query: "Text",
           find: "Search",
           left: "Version A",
@@ -361,6 +380,8 @@
       let generation = 0;
       let painting = false;
       const t = (key) => copy[lang][key] ?? key;
+      const roleName = (role) => (role === "admin" ? t("admin") : t("operator"));
+      const demo = document.querySelector("#demo");
       const stateLabel = (state) => t(state) || state;
 
       const el = (tag, attrs = {}, children = []) => {
@@ -382,6 +403,8 @@
         themeButton.textContent = theme === "dark" ? t("themeToLight") : t("themeToDark");
         langButton.textContent = t("lang");
         logoutButton.textContent = t("logout");
+        demo.hidden = me?.demo !== true;
+        demo.textContent = t("demoBanner");
       };
 
       const api = async (path, options) => {
@@ -488,6 +511,8 @@
           prioritySelect(),
           el("label", { for: "fast", text: t("fast") }),
           checkbox("fast"),
+          el("label", { for: "upload", text: t("upload") }),
+          uploadInput(error),
           el("button", { class: "primary", type: "submit", text: t("run") }),
           error,
         ]);
@@ -537,10 +562,31 @@
         return input;
       };
 
+      const uploadInput = (error) => {
+        const input = el("input", { id: "upload", type: "file" });
+        input.addEventListener("change", async () => {
+          const chosen = input.files?.[0];
+          if (!chosen) return;
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "x-rea-filename": chosen.name },
+            body: chosen,
+          });
+          const type = response.headers.get("content-type") ?? "";
+          const payload = type.includes("json") ? await response.json() : null;
+          if (!response.ok) {
+            error.textContent = message(payload);
+            return;
+          }
+          openJob(payload.id);
+        });
+        return input;
+      };
+
       const notEnabledCard = () =>
         el("article", { class: "card" }, [
-          el("h2", { text: t("notEnabled") }),
-          el("p", { text: t("dockerNote") }),
+          el("h2", { text: me?.sandbox ? t("dockerOn") : t("notEnabled") }),
+          el("p", { text: me?.sandbox ? t("dockerOn") : t("dockerNote") }),
           el("p", { text: t("ramNote") }),
         ]);
 
@@ -798,6 +844,22 @@
             min: "0",
             value: String(settings.ramLimitMb ?? 0),
           }),
+          el("label", { for: "sandbox", text: t("sandbox") }),
+          checkbox("sandbox"),
+          el("label", { for: "image", text: t("sandboxImage") }),
+          el("input", {
+            id: "image",
+            type: "text",
+            value: settings.sandboxImage ?? "rea-sandbox:local",
+          }),
+          el("label", { for: "cpus", text: t("cpus") }),
+          el("input", {
+            id: "cpus",
+            type: "number",
+            min: "1",
+            max: "4",
+            value: String(settings.sandboxCpus ?? 1),
+          }),
           el("button", { class: "primary", type: "submit", text: t("save") }),
           notice,
         ]);
@@ -812,6 +874,7 @@
           if (value === settings.language) option.selected = true;
           language.append(option);
         }
+        form.querySelector("#sandbox").checked = settings.sandbox === true;
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
           const engines = {};
@@ -828,6 +891,9 @@
               telegramChatId: form.querySelector("#chat").value,
               cpuNice: Number(form.querySelector("#nice").value),
               ramLimitMb: Number(form.querySelector("#ram").value),
+              sandbox: form.querySelector("#sandbox").checked,
+              sandboxImage: form.querySelector("#image").value,
+              sandboxCpus: Number(form.querySelector("#cpus").value),
             }),
           });
           notice.textContent = response.ok ? t("saved") : message(response.body);
@@ -999,7 +1065,7 @@
           autocomplete: "new-password",
         });
         const role = el("select", { id: "new-role" }, [
-          el("option", { value: "operator", text: t("operator") }),
+          el("option", { value: "user", text: t("operator") }),
           el("option", { value: "admin", text: t("admin") }),
         ]);
         const form = el("form", { class: "card" }, [
@@ -1052,7 +1118,7 @@
           list.append(
             el("article", { class: "card" }, [
               el("h2", { text: user.username }),
-              el("p", { class: "muted", text: `${user.role}${user.disabled ? " · off" : ""}` }),
+              el("p", { class: "muted", text: `${roleName(user.role)}${user.disabled ? " · off" : ""}` }),
               el("div", { class: "row" }, [toggle, remove]),
             ]),
           );
@@ -1095,6 +1161,28 @@
         return el("section", {}, [el("h1", { text: t("audit") }), table, footer()]);
       };
 
+      const renderSystemMap = async () => {
+        const result = await api("/api/map");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const list = el("ul");
+        for (const row of result.body.engines ?? []) {
+          const note = lang === "en" ? row.note_en : row.note_pt;
+          list.append(
+            el("li", {
+              text: `${row.id}: ${row.runs ? t("ready") : t("notRun")} — ${note}`,
+            }),
+          );
+        }
+        return el("section", {}, [
+          el("h1", { text: t("systemMap") }),
+          el("p", {}, [el("a", { href: "/api/docs", text: t("apiDocs") })]),
+          list,
+          el("p", { class: "muted", text: (result.body.companions ?? []).join(", ") }),
+          el("p", { text: t("noBilling") }),
+          footer(),
+        ]);
+      };
+
       const builders = {
         home: renderHome,
         fresh: () => renderNew(),
@@ -1103,6 +1191,7 @@
         compare: renderCompare,
         search: renderSearch,
         library: renderLibrary,
+        system: renderSystemMap,
         settings: renderSettings,
         users: renderUsers,
         audit: renderAudit,
@@ -1117,6 +1206,7 @@
           ["compare", "compare"],
           ["search", "search"],
           ["library", "library"],
+          ["system", "systemMap"],
         ];
         if (me?.user?.role === "admin") {
           items.push(["settings", "settings"], ["users", "users"], ["audit", "audit"]);

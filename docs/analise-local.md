@@ -1,6 +1,6 @@
 # Análise local sem agente
 
-Este caminho roda o REA na sua máquina, sem Cursor, sem Claude e sem outro modelo. O painel escuta só em `127.0.0.1`. Ele não é um serviço hospedado, não tem conta, cobrança nem vários clientes. A CLI e o MCP do REA continuam iguais: o script apenas chama a CLI que já existe.
+Este caminho roda o REA na sua máquina, sem Cursor, sem Claude e sem outro modelo. Por padrão o painel escuta em `127.0.0.1`. Dá para publicá-lo atrás de um proxy, sem planos, cobrança ou checkout. Há usuários e papéis. A CLI e o MCP do REA continuam iguais: o script apenas chama a CLI que já existe.
 
 O site público em `website/` não recebe esse painel. A página local fica em `scripts/local-analyze-dashboard.html` e só sobe quando você pede.
 
@@ -117,19 +117,21 @@ Estas funções rodam no mesmo processo local, sem modelo:
 
 - Comparar duas análises já feitas: hashes, `strings.txt` e rotas do OpenAPI. A lista de diferenças é limitada.
 - Repetir um alvo da biblioteca a cada N minutos (mínimo 15). O relógio existe só enquanto o painel está aberto. Se o SHA-256 do manifesto mudar, o painel grava a auditoria e, se houver webhook, avisa. A primeira execução só guarda o hash.
-- Fila com prioridade baixa, normal ou alta. Uma análise em andamento não é interrompida. `nice` de 0 a 19, quando o comando `nice` existe, vale para o processo filho. O número de RAM é guardado e mostrado. **TODO:** não há cgroup; o teto de RAM não é aplicado.
+- Fila com prioridade baixa, normal ou alta. Uma análise em andamento não é interrompida. `nice` de 0 a 19, quando o comando `nice` existe e o sandbox está desligado, vale para o processo filho. Sem sandbox, o número de RAM é só mostrado. Com sandbox Docker, `--memory` e `--cpus` são o cgroup.
 - Cada análise ganha `hashes.sha256`. Se o segredo local tiver pelo menos 16 caracteres, `signature.txt` traz um HMAC desse manifesto. É uma etiqueta de integridade deste computador, não um certificado público.
 - Lista no estilo de um checklist, com verde, âmbar e vermelho. Vermelho é etapa do motor que falhou. O texto copia rotas, permissões Android e URLs `http://` que já estavam nos arquivos. Não é um certificado OWASP e não significa que o programa é seguro.
 - Busca em textos `.txt`, `.json` e `.md` das análises: strings, rotas e nomes `android.permission`.
 - Três PDFs: cliente, interno e CTF. O CTF não inventa flag nem solução. A fonte cobre letras comuns do português; o resto vira `?`.
 - Webhook opcional ao terminar uma análise manual. Discord recebe `content`, Telegram recebe `text` e, se você preencher, `chat_id`. Qualquer outro `http` ou `https` recebe JSON `{event, job}`. A auditoria guarda o status HTTP, não o URL. O token de um bot do Telegram fica no caminho; não o copie para o git.
-- Link de leitura com token, cerca de 7 dias, em `/r/<token>`. **Ele só responde em 127.0.0.1.** Não é um endereço na internet.
+- Link de leitura com token, cerca de 7 dias, em `/r/<token>`. O token é a capacidade de leitura. No padrão a página só escuta em 127.0.0.1. Se você publicar o painel, quem tiver o token lê o relatório.
 - Exportar e importar a configuração dos motores. Chaves fora da lista (`PATH`, `LD_PRELOAD` e qualquer outra) são descartadas.
 - Modo rápido para JavaScript e site estático: não chama Ghidra nem JADX. Em APK, nativo ou .NET o modo recusa e não chama esses motores.
 
-**TODO:** sandbox Docker não está habilitado. Não há imagem mantida neste repositório, e o painel não inicia o Docker nem executa o alvo dentro de um contêiner.
+O sandbox Docker começa desligado. Ligue com `REA_SANDBOX=1` ou no ajuste do administrador. A imagem `rea-sandbox:local` não é baixada por este repositório; o arquivo `deploy/Dockerfile.sandbox` mostra como montá-la. Se o sandbox está ligado e o comando `docker` não existe, a análise não roda no host. Frida continua só como presença. Apktool não é uma etapa do pipeline.
 
-## Licença e um serviço pago
+Upload de APK e binário fica em `output/uploads/<usuário>/`, com teto de tamanho e conferência do tipo pelo conteúdo. O papel `user` na API é gravado como usuário (operador). Um administrador vê todas as análises. Outro usuário recebe 404 na análise de outra pessoa. `GET /api/health`, `GET /api/openapi.json` e `GET /api/docs` descrevem a API. O modo `REA_DEMO=1` só aceita upload, GitHub ou o APK fixado.
+
+## Licença e hospedagem sem cobrança
 
 Isto não é parecer jurídico. O texto abaixo só aponta o que os arquivos deste repositório dizem.
 
@@ -141,8 +143,8 @@ Ghidra, JADX, jadx-headless-mcp e Apktool estão registrados como Apache-2.0. Re
 
 Rizin e GhidraMCP não aparecem na tabela de licenças do repositório. A partir desse inventário, a resposta é `NOT_ENOUGH_INFO`. OpenJDK, quando o usuário o instala, é GPLv2 com exceção Classpath. Node.js é MIT.
 
-Um produto pago, se existir, continua em outro repositório. Hospedar este painel como SaaS não foi feito aqui e esbarra em cada licença acima, em especial nas EULAs de IDA, Hopper e JEB e nas partes copyleft de Frida, GDB e dos módulos GPL do Ghidra.
+Esta página pode ser publicada atrás de um proxy, sem planos, cobrança, Stripe ou checkout. Isso não libera IDA, Hopper ou JEB, nem troca a licença das peças GPL/LGPL. Rizin e GhidraMCP continuam fora da tabela (`NOT_ENOUGH_INFO`).
 
 ## O que não muda
 
-`npm start` continua sendo o servidor MCP por stdio. `rea setup` não chama este painel. Um produto separado, se existir, fica em outro repositório e não faz parte daqui.
+`npm start` continua sendo o servidor MCP por stdio. `rea setup` não chama este painel. Não há checkout. O deploy opcional está em `deploy/README.md`.

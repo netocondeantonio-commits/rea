@@ -1,5 +1,10 @@
 import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import {
+  canSeeTarget,
+  demoAllowsTarget,
+  targetWrite,
+} from "./local-admin-access.mjs";
 import { engineStatus } from "./local-admin-status.mjs";
 import {
   cancelJob,
@@ -31,6 +36,35 @@ const jobsOf = (jobs) =>
 const outputDir = async (ctx) => {
   await mkdir(ctx.options.output, { recursive: true });
   return ctx.options.output;
+};
+
+const uploadsRoot = (ctx) => join(ctx.options.output, "uploads");
+
+export const enqueueAnalysis = async (ctx, target, extra = {}) => {
+  const settings = ctx.admin.readSettings();
+  const job = createJob(await outputDir(ctx), target, {
+    kind: extra.kind,
+    user: ctx.actor.user,
+    priority: extra.priority,
+    fast: extra.fast === true,
+    cpuNice: settings.cpuNice,
+    ramLimitMb: settings.ramLimitMb,
+  });
+  ctx.jobs.set(job.id, job);
+  await saveIndex(job);
+  enqueueJob(job, ctx.analyze);
+  return job;
+};
+
+const demoBlocked = (ctx, target) => {
+  if (demoAllowsTarget(target, uploadsRoot(ctx))) return false;
+  fail(
+    ctx.response,
+    400,
+    "No modo demo só valem upload, GitHub ou o APK fixado.",
+    "Demo mode allows an upload, GitHub, or the pinned APK.",
+  );
+  return true;
 };
 
 const audit = (ctx, action, detail) =>
@@ -79,19 +113,13 @@ export const postAnalyze = async (ctx) => {
     );
     return;
   }
+  if (demoBlocked(ctx, target)) return;
   const kind = KINDS.has(body.kind) ? body.kind : "auto";
-  const settings = ctx.admin.readSettings();
-  const job = createJob(await outputDir(ctx), target, {
+  const job = await enqueueAnalysis(ctx, target, {
     kind,
-    user: ctx.actor.user,
     priority: body.priority,
     fast: body.fast === true,
-    cpuNice: settings.cpuNice,
-    ramLimitMb: settings.ramLimitMb,
   });
-  ctx.jobs.set(job.id, job);
-  await saveIndex(job);
-  enqueueJob(job, ctx.analyze);
   await audit(ctx, "analyze", `${kind} ${target}`.slice(0, 180));
   json(ctx.response, 202, publicJob(job));
 };
@@ -121,19 +149,13 @@ export const postRerun = async (ctx, id) => {
     fail(ctx.response, 404, "Análise não encontrada.", "Analysis not found.");
     return;
   }
+  if (demoBlocked(ctx, existing.target)) return;
   const kind = KINDS.has(existing.kind) ? existing.kind : "auto";
-  const settings = ctx.admin.readSettings();
-  const job = createJob(await outputDir(ctx), existing.target, {
+  const job = await enqueueAnalysis(ctx, existing.target, {
     kind,
-    user: ctx.actor.user,
     priority: existing.priority,
     fast: existing.fast === true,
-    cpuNice: settings.cpuNice,
-    ramLimitMb: settings.ramLimitMb,
   });
-  ctx.jobs.set(job.id, job);
-  await saveIndex(job);
-  enqueueJob(job, ctx.analyze);
   await audit(ctx, "rerun", `${id} -> ${job.id}`);
   json(ctx.response, 202, publicJob(job));
 };
@@ -163,7 +185,11 @@ export const getZip = async (ctx, id) => {
 };
 
 export const getTargets = async (ctx) => {
-  json(ctx.response, 200, ctx.admin.listTargets());
+  json(
+    ctx.response,
+    200,
+    ctx.admin.listTargets().filter((item) => canSeeTarget(ctx.actor, item)),
+  );
 };
 
 export const postTarget = async (ctx) => {
@@ -172,7 +198,7 @@ export const postTarget = async (ctx) => {
     fail(ctx.response, 400, "JSON inválido.", "Invalid JSON.");
     return;
   }
-  const result = await ctx.admin.addTarget(body);
+  const result = await ctx.admin.addTarget({ ...body, owner: ctx.actor.user });
   if (result.error) {
     storedError(ctx.response, result);
     return;
@@ -182,6 +208,21 @@ export const postTarget = async (ctx) => {
 };
 
 export const deleteTarget = async (ctx, id) => {
+  const current = ctx.admin.listTargets().find((item) => item.id === id);
+  const access = targetWrite(ctx.actor, current);
+  if (access === "missing") {
+    fail(ctx.response, 404, "Alvo não encontrado.", "Target not found.");
+    return;
+  }
+  if (access === "forbidden") {
+    fail(
+      ctx.response,
+      403,
+      "Só um administrador altera um alvo compartilhado.",
+      "Only an administrator can change a shared target.",
+    );
+    return;
+  }
   await ctx.admin.removeTarget(id);
   await audit(ctx, "target.remove", id);
   json(ctx.response, 200, { ok: true });

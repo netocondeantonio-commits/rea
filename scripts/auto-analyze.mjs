@@ -5,7 +5,14 @@ import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { bindAddress } from "./local-admin-access.mjs";
 import { loadEnvFile } from "./local-admin-auth.mjs";
+import {
+  prepareSandbox,
+  sandboxConfigFrom,
+  sandboxJob,
+  setSandboxConfig,
+} from "./local-admin-sandbox.mjs";
 import { openAdmin } from "./local-admin-store.mjs";
 import { notifyJobFinished } from "./local-admin-schedule.mjs";
 import {
@@ -38,8 +45,9 @@ const help = () => {
   npm run analyze -- <caminho-ou-url-github>
   npm run analyze -- <caminho> --no-serve
 
-Opções: --serve  --no-serve  --port <n>  --output <dir>
-O painel escuta só em 127.0.0.1 e pede um usuário local.
+Opções: --serve  --no-serve  --port <n>  --host <ip>  --output <dir>
+Por padrão o painel escuta em 127.0.0.1. Use --host 0.0.0.0 atrás de um proxy.
+As portas 80 e 443 ficam com o proxy. O painel pede um usuário local.
 Senha: REA_ADMIN_PASSWORD. Token opcional para scripts: REA_ADMIN_TOKEN.
 Cada execução também grava um pacote bilíngue em output/<alvo>/.
 `,
@@ -50,6 +58,7 @@ const parseArgs = (argv) => {
   let serve = false;
   let noServe = false;
   let outputExplicit = false;
+  let host = process.env.REA_BIND ?? "127.0.0.1";
   let port = Number(process.env.REA_ANALYZE_PORT ?? 4174);
   let output =
     process.env.REA_ANALYZE_OUTPUT ??
@@ -61,6 +70,7 @@ const parseArgs = (argv) => {
     if (argument === "--serve") serve = true;
     else if (argument === "--no-serve") noServe = true;
     else if (argument === "--port") port = Number(argv[(index += 1)]);
+    else if (argument === "--host") host = String(argv[(index += 1)] ?? "");
     else if (argument === "--output") {
       output = resolve(argv[(index += 1)] ?? "");
       outputExplicit = true;
@@ -68,14 +78,15 @@ const parseArgs = (argv) => {
       throw new Error(`Opção desconhecida: ${argument}`);
     else positionals.push(argument);
   }
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error("Porta inválida.");
+  const bound = bindAddress(host, port);
+  if (bound.error) throw new Error(bound.error);
   if (positionals.length > 1) throw new Error("Informe um único alvo.");
   return {
     help: false,
     serve: serve || (positionals.length === 1 && !noServe),
     noServe,
-    port,
+    host: bound.host,
+    port: bound.port,
     output: resolve(output),
     outputExplicit,
     baseOutput: resolve(output),
@@ -143,22 +154,62 @@ const detectTarget = async (path) => {
 const isAbort = (cause) =>
   cause?.name === "AbortError" || cause?.code === "ABORT_ERR";
 
-const runRea = async (args, timeoutMs, signal) => {
+const childCommand = async (args) => {
+  const prepared = await prepareSandbox(
+    {
+      repo: root,
+      jobDir: sandboxJob().directory,
+      targetPath: sandboxJob().target,
+      argv: [process.execPath, reaScript, ...args, "--json"],
+      engines: mergedEnv(),
+    },
+    commandExists,
+  );
+  if (prepared.blocked)
+    return {
+      blocked: true,
+      command: process.execPath,
+      argv: [],
+      env: {},
+    };
+  if (prepared.enabled)
+    return {
+      command: prepared.command,
+      argv: prepared.args,
+      env: prepared.env,
+    };
   const nice = currentLimits().cpuNice;
   const useNice = nice > 0 && (await commandExists("nice"));
-  const command = useNice ? "nice" : process.execPath;
-  const argv = useNice
-    ? ["-n", String(nice), process.execPath, reaScript, ...args, "--json"]
-    : [reaScript, ...args, "--json"];
+  return {
+    command: useNice ? "nice" : process.execPath,
+    argv: useNice
+      ? ["-n", String(nice), process.execPath, reaScript, ...args, "--json"]
+      : [reaScript, ...args, "--json"],
+    env: mergedEnv(),
+  };
+};
+
+const runRea = async (args, timeoutMs, signal) => {
+  const launched = await childCommand(args);
+  if (launched.blocked)
+    return {
+      ok: false,
+      stdout: "",
+      stderr: "Sandbox pedido e o Docker não está disponível.",
+    };
   const child = {
     cwd: root,
     timeout: timeoutMs,
     maxBuffer: 64 * 1024 * 1024,
-    env: mergedEnv(),
+    env: launched.env,
   };
   if (signal) child.signal = signal;
   try {
-    const { stdout, stderr } = await execFileAsync(command, argv, child);
+    const { stdout, stderr } = await execFileAsync(
+      launched.command,
+      launched.argv,
+      child,
+    );
     return { ok: true, stdout, stderr };
   } catch (cause) {
     if (isAbort(cause))
@@ -379,6 +430,7 @@ const openLocalAdmin = async (current) => {
     process.stderr.write(
       `Senha inicial do administrador local: ${admin.generatedPassword}\n`,
     );
+  setSandboxConfig(() => sandboxConfigFrom(admin.readSettings()));
   return admin;
 };
 

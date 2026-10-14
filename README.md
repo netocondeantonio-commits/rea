@@ -391,4 +391,6 @@ licenses. REA grants no tool license, key, or activation entitlement. Trials and
 demos remain subject to vendor terms, including user, feature, automation, and
 output sharing restrictions. Cracked copies, stolen keys, unauthorized key
 sharing, and bypassing license restrictions are not authorized. This guidance
-does not amend MIT or third-party licenses.
+does not amend MIT or third-party licenses. Hosting the local admin page
+behind a reverse proxy does not grant IDA, Hopper, or JEB rights, and GPL or
+LGPL pieces stay under their own terms.

@@ -49,9 +49,10 @@ const enqueueDue = async ({ admin, jobs, output, analyze }) => {
   const settings = admin.readSettings();
   for (const target of admin.listTargets()) {
     if (!isDue(target, now, busyFor(jobs, target.id))) continue;
+    const owner = target.owner;
     const job = createJob(output(), target.target, {
       kind: target.kind,
-      user: "schedule",
+      user: owner && owner !== "shared" ? owner : "schedule",
       scheduleTargetId: target.id,
       cpuNice: settings.cpuNice,
       ramLimitMb: settings.ramLimitMb,

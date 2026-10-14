@@ -1,12 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { publicHttpUrl } from "./local-admin-access.mjs";
 import {
   hashPassword,
   randomPassword,
   verifyPassword,
 } from "./local-admin-auth.mjs";
 import { pinnedDigest } from "./local-admin-pins.mjs";
+import { applySandboxSettings, sandboxFields } from "./local-admin-sandbox.mjs";
 
 export const ENGINE_KEYS = Object.freeze([
   "GHIDRA_INSTALL_DIR",
@@ -80,6 +82,7 @@ export const seedTargets = () => [
       "Repositório público de prática. O clone é o código, não o APK pronto.",
     note_en:
       "Public practice repository. The clone is the source, not the built APK.",
+    owner: "shared",
   },
   {
     id: "apidemos-apk",
@@ -92,8 +95,16 @@ export const seedTargets = () => [
       "APK de prática com SHA-256 fixado. A análise só baixa este endereço.",
     note_en:
       "Practice APK with a pinned SHA-256. Analysis downloads only this address.",
+    owner: "shared",
   },
 ];
+
+const normalizeTarget = (row) => {
+  const owner = typeof row?.owner === "string" ? row.owner : "";
+  return { ...row, owner: USERNAME.test(owner) ? owner : "shared" };
+};
+
+const storedRole = (role) => (role === "user" ? "operator" : role);
 
 const normalizeUser = (user) => ({
   id: String(user.id),
@@ -182,14 +193,15 @@ const applyUserPatch = async (users, id, input) => {
   if (!current) return { error: reject("missing") };
   const next = { ...current };
   if (input.role !== undefined) {
-    if (!ROLES.has(input.role)) return { error: reject("role") };
+    const role = storedRole(input.role);
+    if (!ROLES.has(role)) return { error: reject("role") };
     if (
       current.role === "admin" &&
-      input.role !== "admin" &&
+      role !== "admin" &&
       activeAdmins(users).length <= 1
     )
       return { error: reject("lastAdmin") };
-    next.role = input.role;
+    next.role = role;
   }
   if (input.disabled === true) {
     if (current.id === "env-admin") return { error: reject("envAdmin") };
@@ -226,11 +238,12 @@ const userApi = (state, save) => ({
       return reject("exists");
     if (typeof input.password !== "string" || input.password.length < 8)
       return reject("password");
-    if (!ROLES.has(input.role)) return reject("role");
+    const role = storedRole(input.role);
+    if (!ROLES.has(role)) return reject("role");
     const user = {
       id: randomBytes(4).toString("hex"),
       username,
-      role: input.role,
+      role,
       disabled: false,
       passwordHash: await hashPassword(input.password),
     };
@@ -268,6 +281,9 @@ const targetApi = (state, save) => ({
       note_pt: String(input.note_pt ?? "").slice(0, 240),
       note_en: String(input.note_en ?? "").slice(0, 240),
       pinned: pinnedDigest(target) !== undefined,
+      owner: USERNAME.test(String(input.owner ?? ""))
+        ? String(input.owner)
+        : "shared",
     };
     state.targets = [row, ...state.targets].slice(0, 100);
     await save();
@@ -288,16 +304,8 @@ const clampInt = (value, max) => {
 };
 
 const storedWebhook = (value) => {
-  if (typeof value !== "string") return "";
-  const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > 500) return "";
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
+  const url = publicHttpUrl(value);
+  return url ? url.toString() : "";
 };
 
 const storedChat = (value) => {
@@ -315,6 +323,7 @@ const normalizeSettings = (value) => ({
   telegramChatId: storedChat(value.telegramChatId),
   cpuNice: clampInt(value.cpuNice, 19),
   ramLimitMb: clampInt(value.ramLimitMb, 65536),
+  ...sandboxFields(value),
 });
 
 const applySchedule = (next, input) => {
@@ -366,6 +375,7 @@ const applyAdminSettings = (next, input, previous) => {
   if (input.cpuNice !== undefined) next.cpuNice = clampInt(input.cpuNice, 19);
   if (input.ramLimitMb !== undefined)
     next.ramLimitMb = clampInt(input.ramLimitMb, 65536);
+  applySandboxSettings(next, input);
 };
 
 const settingsApi = (state, save) => ({
@@ -410,6 +420,8 @@ export const openAdmin = async ({ directory, env = process.env }) => {
     settings: normalizeSettings(await readJson(settingsPath, {})),
     targets: await readJson(targetsPath, null),
   };
+  if (Array.isArray(state.targets))
+    state.targets = state.targets.map(normalizeTarget);
   await writeFile(usersPath, `${JSON.stringify(state.users, null, 2)}\n`, {
     mode: 0o600,
   });
