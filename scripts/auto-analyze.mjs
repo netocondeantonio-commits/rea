@@ -1,14 +1,22 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { loadEnvFile } from "./local-admin-auth.mjs";
+import { openAdmin } from "./local-admin-store.mjs";
+import {
+  createJob,
+  enqueueJob,
+  loadHistory,
+  mergedEnv,
+  saveIndex,
+  setEngineEnv,
+} from "./local-analyze-jobs.mjs";
+import { analyze, bindLocalAnalyzer } from "./local-analyze-run.mjs";
 import { startLocalDashboard } from "./local-analyze-http.mjs";
-import { writeLocalPackage } from "./local-analyze-package.mjs";
-import { writeLocalReport } from "./local-analyze-report.mjs";
 
 /**
  * Local operator helper. It shells out to the existing REA CLI, writes a
@@ -20,8 +28,6 @@ const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const reaScript = join(root, "scripts", "rea.mjs");
 const dashboardPath = join(root, "scripts", "local-analyze-dashboard.html");
-const githubUrl =
-  /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/u;
 
 const help = () => {
   process.stderr.write(
@@ -31,7 +37,8 @@ const help = () => {
   npm run analyze -- <caminho> --no-serve
 
 Opções: --serve  --no-serve  --port <n>  --output <dir>
-O padrão escuta só em 127.0.0.1. Sem --no-serve, o processo fica no painel.
+O painel escuta só em 127.0.0.1 e pede um usuário local.
+Senha: REA_ADMIN_PASSWORD. Token opcional para scripts: REA_ADMIN_TOKEN.
 Cada execução também grava um pacote bilíngue em output/<alvo>/.
 `,
   );
@@ -40,6 +47,7 @@ Cada execução também grava um pacote bilíngue em output/<alvo>/.
 const parseArgs = (argv) => {
   let serve = false;
   let noServe = false;
+  let outputExplicit = false;
   let port = Number(process.env.REA_ANALYZE_PORT ?? 4174);
   let output =
     process.env.REA_ANALYZE_OUTPUT ??
@@ -51,9 +59,10 @@ const parseArgs = (argv) => {
     if (argument === "--serve") serve = true;
     else if (argument === "--no-serve") noServe = true;
     else if (argument === "--port") port = Number(argv[(index += 1)]);
-    else if (argument === "--output")
+    else if (argument === "--output") {
       output = resolve(argv[(index += 1)] ?? "");
-    else if (argument.startsWith("-"))
+      outputExplicit = true;
+    } else if (argument.startsWith("-"))
       throw new Error(`Opção desconhecida: ${argument}`);
     else positionals.push(argument);
   }
@@ -66,6 +75,8 @@ const parseArgs = (argv) => {
     noServe,
     port,
     output: resolve(output),
+    outputExplicit,
+    baseOutput: resolve(output),
     target: positionals[0],
   };
 };
@@ -127,20 +138,27 @@ const detectTarget = async (path) => {
   return "unknown";
 };
 
-const runRea = async (args, timeoutMs) => {
+const isAbort = (cause) =>
+  cause?.name === "AbortError" || cause?.code === "ABORT_ERR";
+
+const runRea = async (args, timeoutMs, signal) => {
+  const child = {
+    cwd: root,
+    timeout: timeoutMs,
+    maxBuffer: 64 * 1024 * 1024,
+    env: mergedEnv(),
+  };
+  if (signal) child.signal = signal;
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
       [reaScript, ...args, "--json"],
-      {
-        cwd: root,
-        timeout: timeoutMs,
-        maxBuffer: 64 * 1024 * 1024,
-        env: process.env,
-      },
+      child,
     );
     return { ok: true, stdout, stderr };
   } catch (cause) {
+    if (isAbort(cause))
+      return { ok: false, cancelled: true, stdout: "", stderr: "Cancelado." };
     const error = cause instanceof Error ? cause : new Error(String(cause));
     const stdout = typeof error.stdout === "string" ? error.stdout : "";
     const stderr = typeof error.stderr === "string" ? error.stderr : "";
@@ -232,7 +250,7 @@ const factsFrom = (value) => {
   return facts.slice(0, 8);
 };
 
-const planSteps = async (kind, path) => {
+const planSteps = async (kind, path, signal) => {
   if (kind === "javascript")
     return [
       {
@@ -243,7 +261,7 @@ const planSteps = async (kind, path) => {
       },
     ];
   if (kind === "android") {
-    if ((process.env.REA_JADX_MCP_JAR ?? "").length === 0)
+    if ((mergedEnv().REA_JADX_MCP_JAR ?? "").length === 0)
       return [
         {
           id: "android-missing",
@@ -269,7 +287,11 @@ const planSteps = async (kind, path) => {
       },
     ];
   if (kind === "pe") {
-    const managed = await runRea(["inspect-managed-artifact", path], 60_000);
+    const managed = await runRea(
+      ["inspect-managed-artifact", path],
+      60_000,
+      signal,
+    );
     if (managed.ok)
       return [
         {
@@ -297,14 +319,14 @@ const planNative = async (path, notes) => {
   const steps = [];
   for (const note of notes)
     steps.push({ id: "note", title: "Nota", skip: note });
-  if (await commandExists(process.env.REA_OBJDUMP_COMMAND ?? "objdump"))
+  if (await commandExists(mergedEnv().REA_OBJDUMP_COMMAND ?? "objdump"))
     steps.push({
       id: "objdump",
       title: "objdump",
       args: ["inspect-with-objdump", path, "file_headers"],
       timeoutMs: 60_000,
     });
-  if (await commandExists(process.env.REA_RIZIN_COMMAND ?? "rizin")) {
+  if (await commandExists(mergedEnv().REA_RIZIN_COMMAND ?? "rizin")) {
     steps.push({
       id: "rizin",
       title: "Rizin",
@@ -318,7 +340,7 @@ const planNative = async (path, notes) => {
       timeoutMs: 60_000,
     });
   }
-  if ((process.env.GHIDRA_INSTALL_DIR ?? "").length > 0)
+  if ((mergedEnv().GHIDRA_INSTALL_DIR ?? "").length > 0)
     steps.push({
       id: "ghidra",
       title: "Ghidra",
@@ -334,152 +356,39 @@ const planNative = async (path, notes) => {
   return steps;
 };
 
-const persist = async (job) => {
-  try {
-    await writeLocalPackage(job, { runRea, commandExists });
-  } catch (cause) {
-    job.events.push({
-      message: `Pacote bilíngue não foi escrito: ${cause instanceof Error ? cause.message : cause}`,
-    });
-  }
-  await writeLocalReport(job);
-  await writeFile(
-    join(job.directory, "job.json"),
-    JSON.stringify(job, null, 2),
-  );
+const loadAdminEnv = async () => {
+  if (process.env.REA_ADMIN_ENV) await loadEnvFile(process.env.REA_ADMIN_ENV);
+  await loadEnvFile(join(root, ".env"));
+  await loadEnvFile(join(homedir(), ".local", "share", "rea", "admin.env"));
 };
 
-const failJob = async (job, detected, message, note) => {
-  job.detected = detected;
-  note(message);
-  note("Escrevendo o pacote em português e inglês");
-  await mkdir(job.directory, { recursive: true });
-  await persist(job);
-  job.state = "failed";
-  await writeFile(
-    join(job.directory, "job.json"),
-    JSON.stringify(job, null, 2),
-  );
-};
-
-const githubRejected = (owner, repo) =>
-  owner === "." ||
-  owner === ".." ||
-  repo === "." ||
-  repo === ".." ||
-  owner.includes("..") ||
-  repo.includes("..");
-
-const resolveSource = async (job, note) => {
-  const target = job.target.trim();
-  const match = githubUrl.exec(target);
-  if (match !== null) {
-    if (githubRejected(match[1], match[2])) {
-      await failJob(job, "github", "URL do GitHub recusada.", note);
-      return undefined;
-    }
-    const destination = join(job.directory, "source");
-    note(`Clonando ${job.target}`);
-    await mkdir(job.directory, { recursive: true });
-    try {
-      await execFileAsync(
-        "git",
-        ["clone", "--depth", "1", "--", target, destination],
-        {
-          timeout: 120_000,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-        },
-      );
-    } catch (cause) {
-      await failJob(
-        job,
-        "github",
-        cause instanceof Error ? cause.message : String(cause),
-        note,
-      );
-      return undefined;
-    }
-    return destination;
-  }
-  if (/^https?:\/\//u.test(target)) {
-    await failJob(
-      job,
-      "url",
-      "Só URLs https://github.com/org/repo são aceitas. Um site em execução não é clonado daqui.",
-      note,
+const openLocalAdmin = async (current) => {
+  const admin = await openAdmin({
+    directory:
+      process.env.REA_ADMIN_DIR ??
+      join(homedir(), ".local", "share", "rea", "admin"),
+  });
+  setEngineEnv(() => admin.engineEnv());
+  if (!current.outputExplicit && admin.readSettings().outputDir.length > 0)
+    current.output = resolve(admin.readSettings().outputDir);
+  if (admin.generatedPassword)
+    process.stderr.write(
+      `Senha inicial do administrador local: ${admin.generatedPassword}\n`,
     );
-    return undefined;
-  }
-  const source = resolve(job.target);
-  if (!(await exists(source))) {
-    await failJob(job, "ausente", `Caminho não encontrado: ${source}`, note);
-    return undefined;
-  }
-  return source;
+  return admin;
 };
 
-const analyze = async (job, onUpdate) => {
-  job.state = "running";
-  const note = (message) => {
-    job.events.push({ message });
-    onUpdate();
-  };
-  const source = await resolveSource(job, note);
-  if (source === undefined) return;
-  job.resolved = source;
-  job.detected = await detectTarget(source);
-  note(`Tipo detectado: ${job.detected}`);
-  await mkdir(join(job.directory, "evidence"), { recursive: true });
-  const steps = await planSteps(job.detected, source);
-  for (const step of steps) {
-    if (step.skip !== undefined) {
-      job.steps.push(step);
-      note(step.skip);
-      continue;
-    }
-    note(`Rodando ${step.title}`);
-    const result =
-      step.precomputed ?? (await runRea(step.args, step.timeoutMs));
-    const parsed = parseJson(result.stdout);
-    const record = {
-      ...step,
-      ok: result.ok,
-      facts: factsFrom(parsed),
-      stderr: result.stderr,
-    };
-    job.steps.push(record);
-    await writeFile(
-      join(job.directory, "evidence", `${step.id}.json`),
-      result.stdout.length > 0
-        ? result.stdout
-        : `${JSON.stringify({ ok: false, stderr: result.stderr })}\n`,
-    );
-    note(result.ok ? `${step.title} concluído` : `${step.title} falhou`);
-  }
-  note("Escrevendo o pacote em português e inglês");
-  await persist(job);
-  job.state = job.steps.some((step) => step.ok) ? "done" : "failed";
-  await writeFile(
-    join(job.directory, "job.json"),
-    JSON.stringify(job, null, 2),
+const reportCli = (job) => {
+  const packageReadme =
+    job.package_slug === undefined
+      ? ""
+      : `${join(job.directory, "output", job.package_slug, "README.pt-BR.md")}\n`;
+  process.stderr.write(
+    `${job.headline}\n${join(job.directory, "report.md")}\n${packageReadme}`,
   );
 };
 
-const createJob = (output, target) => {
-  const id = `${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
-  return {
-    id,
-    target,
-    state: "queued",
-    detected: null,
-    directory: join(output, id),
-    events: [],
-    steps: [],
-    headline: "",
-    report_markdown: "",
-  };
-};
-
+await loadAdminEnv();
 let options;
 try {
   options = parseArgs(process.argv.slice(2));
@@ -491,26 +400,49 @@ if (options.help || (options.target === undefined && !options.serve)) {
   help();
   process.exit(options.help ? 0 : 2);
 }
+bindLocalAnalyzer({
+  runRea,
+  commandExists,
+  detectTarget,
+  planSteps,
+  exists,
+  parseJson,
+  factsFrom,
+});
+const admin = await openLocalAdmin(options);
 await mkdir(options.output, { recursive: true });
 const jobs = new Map();
+await loadHistory(options.output, jobs);
 if (options.serve)
   await startLocalDashboard({
     options,
     jobs,
     dashboardPath,
     analyze,
-    createJob,
+    admin,
+    runRea,
+    commandExists,
   });
-if (options.target !== undefined) {
-  const job = createJob(options.output, options.target);
+if (options.target !== undefined && options.serve) {
+  const job = createJob(options.output, options.target, { user: "cli" });
   jobs.set(job.id, job);
+  await saveIndex(job);
+  enqueueJob(job, analyze);
+  await admin.audit({
+    user: "cli",
+    action: "analyze",
+    detail: job.target.slice(0, 180),
+  });
+}
+if (options.target !== undefined && !options.serve) {
+  const job = createJob(options.output, options.target, { user: "cli" });
+  jobs.set(job.id, job);
+  await admin.audit({
+    user: "cli",
+    action: "analyze",
+    detail: job.target.slice(0, 180),
+  });
   await analyze(job, () => {});
-  const packageReadme =
-    job.package_slug === undefined
-      ? ""
-      : `${join(job.directory, "output", job.package_slug, "README.pt-BR.md")}\n`;
-  process.stderr.write(
-    `${job.headline}\n${join(job.directory, "report.md")}\n${packageReadme}`,
-  );
-  if (!options.serve) process.exit(job.state === "done" ? 0 : 1);
+  reportCli(job);
+  process.exit(job.state === "done" ? 0 : 1);
 }

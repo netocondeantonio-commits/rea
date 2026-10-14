@@ -59,6 +59,9 @@ Thumbs.db
 /website/public/assets/social-card.png
 /website/.venv/
 
+# Local admin credentials. See docs/examples/rea-admin.env.example.
+/.env
+
 # Local Cloudflare development state
 /website/.wrangler/
 /website/.dev.vars*

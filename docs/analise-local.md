@@ -44,6 +44,7 @@ npm run analyze -- /caminho/do/alvo --no-serve --output /caminho/dos/relatorios
 - Assembly .NET (PE com metadados CLI): inspeção gerenciada, sem motor nativo.
 - Diretório só com `index.html`: o relatório diz que a observação no navegador precisa de um Chrome com porta de depuração. Este comando não abre navegador.
 - `https://github.com/org/repo`: clone raso (`git clone --depth 1`) para a pasta da execução e, em seguida, a mesma detecção acima.
+- O APK de prática ApiDemos 6.0.18, com o endereço e o SHA-256 gravados no repositório. Esse é o único arquivo remoto que o painel baixa. O hash é conferido antes de analisar.
 
 Outras URLs são recusadas. O script não baixa um site arbitrário e não executa o texto colado num shell.
 
@@ -58,8 +59,12 @@ Nenhuma chave de API é necessária.
 | `REA_JADX_MCP_JAR`    | Caminho absoluto do JAR `jadx-headless-mcp` 0.7.1. Sem ele, um APK gera um relatório que explica a falta. |
 | `REA_OBJDUMP_COMMAND` | Caminho absoluto do `objdump`, se não for o do `PATH`.                                                    |
 | `REA_RIZIN_COMMAND`   | Caminho absoluto do `rizin`, se não for o do `PATH`.                                                      |
-| `REA_ANALYZE_OUTPUT`  | Pasta dos relatórios.                                                                                     |
+| `REA_ANALYZE_OUTPUT`  | Pasta dos relatórios, se os ajustes do painel não escolherem outra.                                       |
 | `REA_ANALYZE_PORT`    | Porta do painel. Padrão: `4174`.                                                                          |
+| `REA_ADMIN_USER`      | Usuário do administrador local. Padrão: `admin`.                                                          |
+| `REA_ADMIN_PASSWORD`  | Senha desse usuário. Se faltar na primeira abertura, o processo imprime uma senha uma única vez.          |
+| `REA_ADMIN_TOKEN`     | Opcional. Com 16 caracteres ou mais, scripts enviam `Authorization: Bearer`. Não cria nem apaga usuários. |
+| `REA_ADMIN_DIR`       | Pasta dos usuários, ajustes, alvos e da auditoria. Padrão: `~/.local/share/rea/admin`.                    |
 
 Hopper e IDA não são instalados por este comando. Se quiser usá-los, configure-os à parte e chame a CLI diretamente.
 
@@ -82,6 +87,29 @@ No fim da análise, a pasta da execução ganha `output/<nome-do-alvo>/`. O nome
 | `index.html`                                                | As duas línguas lado a lado, com os mesmos links.                                                                                                    |
 
 O texto é montado por regras a partir dos arquivos e do JSON. Nenhum modelo escreve esse pacote. Se um campo não veio no alvo, a página diz que ele não foi declarado.
+
+## Painel administrador
+
+`npm run analyze -- --serve` abre o mesmo endereço de antes, agora com login. A página HTML é pública; as rotas de análise, pacote e relatório pedem sessão ou o token. O cookie `rea_session` fica só neste navegador, por cerca de 12 horas.
+
+As telas são: início (motores, fila e análises recentes), nova análise, histórico com andamento, cancelamento e nova execução, resultado (mapa, OpenAPI, visão do código, textos em português e inglês, evidência), biblioteca de alvos, ajustes, usuários e auditoria. Dá para alternar o tema claro/escuro e o idioma. A biblioteca já traz o repositório e o APK de prática do ApiDemos.
+
+Um administrador cria operadores, muda senhas e desativa contas. O usuário `env-admin`, vindo do ambiente, não pode ser apagado nem desativado. Sempre fica pelo menos um administrador ativo. A auditoria guarda quem entrou, quem analisou, quem cancelou e quem mudou usuários ou ajustes. Senhas não entram nesse registro.
+
+Ajustes de caminho (`GHIDRA_INSTALL_DIR`, `JAVA_HOME`, `REA_JADX_MCP_JAR`, `REA_RIZIN_COMMAND`, `REA_OBJDUMP_COMMAND`, `REA_GDB_COMMAND`, `GHIDRA_MCP_BIN`) valem só para o processo filho do REA. Eles não alteram o `PATH` do seu shell. A pasta de saída vazia volta ao padrão da linha de comando.
+
+Para exportar, abra a análise e use o ZIP. Ele junta a pasta da execução, sem `node_modules` nem `.git`, com limite de tamanho. Os arquivos do pacote também abrem um a um.
+
+Exemplo para um script, com o painel já aberto:
+
+```bash
+curl -sS -X POST http://127.0.0.1:4174/api/analyze \
+  -H "Authorization: Bearer $REA_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"target":"/caminho/do/app","kind":"auto"}'
+```
+
+Copie `docs/examples/rea-admin.env.example` para `.env` na raiz do repositório ou para `~/.local/share/rea/admin.env`. Não grave a senha real no git. A versão em inglês destes passos está em [Local admin](local-admin.md).
 
 ## O que não muda
 

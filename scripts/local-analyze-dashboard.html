@@ -1,279 +1,912 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Análise local</title>
+    <title>REA local</title>
     <style>
       :root {
         color-scheme: light;
         --ink: #1c1915;
-        --muted: #5c564c;
-        --line: #e4ddd2;
-        --paper: #f7f3ec;
-        --card: #fffdf9;
-        --accent: #2f5d50;
+        --muted: #5e574c;
+        --line: #e3d9cc;
+        --paper: #f6f1e8;
+        --card: #fffdf8;
+        --accent: #1f6b4a;
         --warn: #8a4b12;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --ink: #f3efe6;
+        --muted: #c3b8a8;
+        --line: #3d3830;
+        --paper: #17140f;
+        --card: #262219;
+        --accent: #8dccb0;
+        --warn: #f0b27a;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+        font-family: "Iowan Old Style", Palatino, Georgia, serif;
         background: var(--paper);
         color: var(--ink);
       }
-      main {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: 40px 20px 64px;
+      button, input, select { font: inherit; color: inherit; }
+      header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        position: sticky;
+        top: 0;
       }
-      h1 { font-size: 2rem; font-weight: 600; margin: 0 0 8px; }
-      p { line-height: 1.5; }
-      .lede { color: var(--muted); margin-top: 0; }
-      form, article, section {
+      nav, .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tools { margin-left: auto; }
+      nav button, .tools button, button.quiet {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      nav button[aria-current="page"] { border-color: var(--line); background: var(--paper); }
+      main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+      h1 { font-size: 1.8rem; font-weight: 600; margin: 0 0 8px; }
+      h2 { font-size: 1.15rem; margin: 0 0 8px; }
+      p { line-height: 1.45; }
+      .muted { color: var(--muted); }
+      .warn { color: var(--warn); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+      .card, form.card, table {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
-        padding: 16px;
-        margin-top: 16px;
       }
-      label { display: block; font-size: 0.95rem; margin-bottom: 8px; }
-      input[type="text"] {
-        width: 100%;
-        font: 16px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fff;
-      }
-      button {
-        margin-top: 12px;
+      .card, form.card { padding: 14px; margin-top: 12px; }
+      button.primary {
         background: var(--accent);
         color: white;
         border: 0;
         border-radius: 8px;
-        padding: 10px 16px;
-        font: 600 16px/1.2 Georgia, serif;
+        padding: 8px 14px;
         cursor: pointer;
       }
-      button:disabled { opacity: 0.6; cursor: wait; }
-      .status { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
-      .warn { color: var(--warn); }
-      ul { padding-left: 1.2rem; }
-      li { margin: 4px 0; }
-      pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+      :root[data-theme="dark"] button.primary { color: #14241c; }
+      input, select, textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+      }
+      label { display: block; margin: 10px 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .login form { width: min(440px, 100%); }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .map { max-width: 100%; background: white; border-radius: 8px; }
       a { color: var(--accent); }
-      footer { color: var(--muted); font-size: 0.9rem; margin-top: 24px; }
-      .row { display: flex; gap: 8px; align-items: center; }
-      .lang { background: transparent; color: var(--accent); border: 1px solid var(--line); }
-      .lang[aria-pressed="true"] { background: var(--accent); color: white; }
-      #artifacts { display: grid; gap: 12px; }
-      #artifacts article { margin-top: 0; }
-      #artifacts h3 { margin: 0 0 6px; font-size: 1.05rem; }
+      pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+      footer { color: var(--muted); margin-top: 28px; font-size: 0.92rem; }
     </style>
   </head>
   <body>
-    <main>
-      <div class="row">
-        <h1>Análise local</h1>
-        <button id="lang-pt" class="lang" type="button" aria-pressed="true">Português</button>
-        <button id="lang-en" class="lang" type="button" aria-pressed="false">English</button>
-      </div>
-      <p class="lede" id="lede">
-        Cole um caminho nesta máquina ou a URL de um repositório público do GitHub.
-        A análise usa a CLI do REA nesta máquina. Nenhum modelo de IA entra nesse caminho.
-        No fim, a página lista um pacote em português e inglês.
-      </p>
-      <form id="analyze-form">
-        <label for="target">Caminho ou URL do GitHub</label>
-        <input id="target" name="target" type="text" autocomplete="off" spellcheck="false" placeholder="/caminho/do/app ou https://github.com/org/repo" required />
-        <button id="submit" type="submit">Analisar</button>
-      </form>
-      <section>
-        <h2>Andamento</h2>
-        <p id="status" class="status">Nenhuma análise nesta sessão.</p>
-        <ul id="events"></ul>
-      </section>
-      <section id="artifact-wrap" hidden>
-        <h2 id="artifact-title">Pacote para quem está começando</h2>
-        <div id="artifacts"></div>
-      </section>
-      <article id="report-wrap" hidden>
-        <h2 id="report-title">Registro curto</h2>
-        <p><a id="report-link" href="">Abrir o HTML do relatório</a></p>
-        <div id="report"></div>
-      </article>
-      <footer>
-        Painel só em 127.0.0.1. Não é um serviço hospedado. A CLI e o MCP do REA continuam iguais.
-      </footer>
-    </main>
+    <div id="login" class="login" hidden></div>
+    <div id="app" hidden>
+      <header>
+        <strong>REA</strong>
+        <nav id="nav"></nav>
+        <div class="tools">
+          <button id="theme" type="button"></button>
+          <button id="lang" type="button"></button>
+          <button id="logout" type="button"></button>
+        </div>
+      </header>
+      <main id="main"></main>
+    </div>
     <script>
-      const form = document.querySelector("#analyze-form");
-      const target = document.querySelector("#target");
-      const submit = document.querySelector("#submit");
-      const status = document.querySelector("#status");
-      const events = document.querySelector("#events");
-      const reportWrap = document.querySelector("#report-wrap");
-      const report = document.querySelector("#report");
-      const reportLink = document.querySelector("#report-link");
-      const artifactWrap = document.querySelector("#artifact-wrap");
-      const artifacts = document.querySelector("#artifacts");
-      const lede = document.querySelector("#lede");
-      const artifactTitle = document.querySelector("#artifact-title");
-      const reportTitle = document.querySelector("#report-title");
-      const langPt = document.querySelector("#lang-pt");
-      const langEn = document.querySelector("#lang-en");
-      let timer = 0;
-      let lang = "pt-BR";
-      let current = null;
-
-      const text = {
+      const copy = {
         "pt-BR": {
-          lede: "Cole um caminho nesta máquina ou a URL de um repositório público do GitHub. A análise usa a CLI do REA nesta máquina. Nenhum modelo de IA entra nesse caminho. No fim, a página lista um pacote em português e inglês.",
-          artifacts: "Pacote para quem está começando",
+          title: "Administração local",
+          hint: "Usuário e senha vêm deste computador. A página só escuta em 127.0.0.1. Nenhum modelo entra nesse caminho.",
+          user: "Usuário",
+          password: "Senha",
+          enter: "Entrar",
+          logout: "Sair",
+          themeToDark: "Escuro",
+          themeToLight: "Claro",
+          lang: "English",
+          home: "Início",
+          fresh: "Nova análise",
+          history: "Histórico",
+          library: "Biblioteca",
+          settings: "Ajustes",
+          users: "Usuários",
+          audit: "Auditoria",
+          engines: "Motores nesta máquina",
+          queue: "Fila",
+          recent: "Análises recentes",
+          empty: "Nada por aqui ainda.",
+          ready: "pronto",
+          missing: "ausente",
+          notRun: "presente, não executado",
+          healthy: "doctor saudável",
+          notHealthy: "doctor respondeu, sem marcar saudável",
+          unavailable: "doctor indisponível",
+          ghidra: "Ghidra",
+          jadx: "JADX",
+          rizin: "Rizin",
+          frida: "Frida",
+          doctor: "rea doctor",
+          target: "Caminho local ou URL do GitHub",
+          kind: "Tipo",
+          auto: "Detectar",
+          javascript: "JavaScript",
+          android: "Android",
+          native: "Nativo",
+          website: "Site estático",
+          dotnet: ".NET",
+          run: "Analisar",
+          runHint: "A fila roda uma análise por vez. O pacote sai em português e inglês.",
+          cancel: "Cancelar",
+          rerun: "Rodar de novo",
+          zip: "Baixar ZIP",
           report: "Registro curto",
+          log: "Andamento",
+          results: "Resultado",
+          map: "Mapa",
           open: "Abrir",
-          reportLink: "Abrir o HTML do registro curto",
-          idle: "Nenhuma análise nesta sessão.",
-          sending: "Enviando…",
-          label: "Caminho ou URL do GitHub",
-          submit: "Analisar",
+          name: "Nome",
+          note: "Nota",
+          add: "Guardar alvo",
+          remove: "Remover",
+          output: "Pasta dos relatórios",
+          language: "Idioma padrão",
+          theme: "Tema",
+          save: "Salvar",
+          tokenOn: "Token de API configurado. Scripts podem enviar Authorization: Bearer.",
+          tokenOff: "Sem token. Defina REA_ADMIN_TOKEN (16 caracteres ou mais) e reinicie o painel.",
+          role: "Papel",
+          admin: "administrador",
+          operator: "operador",
+          create: "Criar usuário",
+          disable: "Desativar",
+          enable: "Ativar",
+          when: "Quando",
+          who: "Quem",
+          action: "Ação",
+          detail: "Detalhe",
+          state: "Estado",
+          queued: "na fila",
+          running: "rodando",
+          done: "concluída",
+          failed: "falhou",
+          cancelled: "cancelada",
+          footer: "Painel só neste computador. Não é um serviço hospedado. A CLI e o MCP do REA continuam iguais.",
+          saved: "Guardado.",
+          error: "Não foi possível concluir.",
         },
         en: {
-          lede: "Paste a path on this machine or a public GitHub repository URL. The analysis uses the REA CLI on this machine. No AI model is on this path. At the end, the page lists a package in Portuguese and English.",
-          artifacts: "Package for a first reading",
+          title: "Local admin",
+          hint: "The user and password come from this computer. The page listens only on 127.0.0.1. No model is on this path.",
+          user: "User",
+          password: "Password",
+          enter: "Sign in",
+          logout: "Sign out",
+          themeToDark: "Dark",
+          themeToLight: "Light",
+          lang: "Português",
+          home: "Home",
+          fresh: "New analysis",
+          history: "History",
+          library: "Library",
+          settings: "Settings",
+          users: "Users",
+          audit: "Audit",
+          engines: "Engines on this machine",
+          queue: "Queue",
+          recent: "Recent analyses",
+          empty: "Nothing here yet.",
+          ready: "ready",
+          missing: "missing",
+          notRun: "present, not run",
+          healthy: "doctor is healthy",
+          notHealthy: "doctor answered, not marked healthy",
+          unavailable: "doctor unavailable",
+          ghidra: "Ghidra",
+          jadx: "JADX",
+          rizin: "Rizin",
+          frida: "Frida",
+          doctor: "rea doctor",
+          target: "Local path or GitHub URL",
+          kind: "Type",
+          auto: "Detect",
+          javascript: "JavaScript",
+          android: "Android",
+          native: "Native",
+          website: "Static site",
+          dotnet: ".NET",
+          run: "Analyze",
+          runHint: "The queue runs one analysis at a time. The package is written in Portuguese and English.",
+          cancel: "Cancel",
+          rerun: "Run again",
+          zip: "Download ZIP",
           report: "Short log",
+          log: "Progress",
+          results: "Result",
+          map: "Map",
           open: "Open",
-          reportLink: "Open the short-log HTML",
-          idle: "No analysis in this session.",
-          sending: "Sending…",
-          label: "Path or GitHub URL",
-          submit: "Analyze",
+          name: "Name",
+          note: "Note",
+          add: "Save target",
+          remove: "Remove",
+          output: "Report folder",
+          language: "Default language",
+          theme: "Theme",
+          save: "Save",
+          tokenOn: "API token is configured. Scripts can send Authorization: Bearer.",
+          tokenOff: "No token. Set REA_ADMIN_TOKEN (16 characters or more) and restart the page.",
+          role: "Role",
+          admin: "administrator",
+          operator: "operator",
+          create: "Create user",
+          disable: "Disable",
+          enable: "Enable",
+          when: "When",
+          who: "Who",
+          action: "Action",
+          detail: "Detail",
+          state: "State",
+          queued: "queued",
+          running: "running",
+          done: "done",
+          failed: "failed",
+          cancelled: "cancelled",
+          footer: "This page stays on this computer. It is not a hosted service. The REA CLI and MCP stay the same.",
+          saved: "Saved.",
+          error: "That did not finish.",
         },
       };
 
-      const renderArtifacts = (job) => {
-        artifacts.replaceChildren();
-        const list = (job?.artifacts ?? []).filter(
+      const login = document.querySelector("#login");
+      const app = document.querySelector("#app");
+      const nav = document.querySelector("#nav");
+      const main = document.querySelector("#main");
+      const themeButton = document.querySelector("#theme");
+      const langButton = document.querySelector("#lang");
+      const logoutButton = document.querySelector("#logout");
+      let lang = localStorage.getItem("rea-lang") === "en" ? "en" : "pt-BR";
+      let theme = localStorage.getItem("rea-theme") === "dark" ? "dark" : "light";
+      let me = null;
+      let view = "home";
+      let jobId = "";
+      let generation = 0;
+      let painting = false;
+      const t = (key) => copy[lang][key] ?? key;
+      const stateLabel = (state) => t(state) || state;
+
+      const el = (tag, attrs = {}, children = []) => {
+        const node = document.createElement(tag);
+        for (const [key, value] of Object.entries(attrs)) {
+          if (value === undefined) continue;
+          if (key === "text") node.textContent = value;
+          else node.setAttribute(key, value);
+        }
+        for (const child of children) if (child) node.append(child);
+        return node;
+      };
+
+      const applyChrome = () => {
+        document.documentElement.lang = lang === "en" ? "en" : "pt-BR";
+        document.documentElement.dataset.theme = theme;
+        localStorage.setItem("rea-lang", lang);
+        localStorage.setItem("rea-theme", theme);
+        themeButton.textContent = theme === "dark" ? t("themeToLight") : t("themeToDark");
+        langButton.textContent = t("lang");
+        logoutButton.textContent = t("logout");
+      };
+
+      const api = async (path, options) => {
+        const response = await fetch(path, options);
+        const type = response.headers.get("content-type") ?? "";
+        const body = type.includes("json") ? await response.json() : null;
+        return { ok: response.ok, status: response.status, body };
+      };
+
+      const message = (body) =>
+        (lang === "en" ? body?.message_en : body?.message) || t("error");
+
+      const footer = () => el("footer", { text: t("footer") });
+
+      const engineCard = (key, row) => {
+        let detail = row?.ready ? t("ready") : t("missing");
+        if (key === "frida") detail = row?.ready ? t("notRun") : t("missing");
+        if (key === "doctor") {
+          if (row?.detail === "healthy") detail = t("healthy");
+          else if (row?.detail === "not-healthy") detail = t("notHealthy");
+          else detail = t("unavailable");
+        }
+        return el("article", { class: "card" }, [
+          el("h2", { text: t(key) }),
+          el("p", { text: detail }),
+        ]);
+      };
+
+      const jobTable = (jobs) => {
+        const table = el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", { text: t("when") }),
+              el("th", { text: t("state") }),
+              el("th", { text: t("target") }),
+              el("th", { text: t("who") }),
+            ]),
+          ]),
+        ]);
+        const body = el("tbody");
+        for (const job of jobs) {
+          const button = el("button", { class: "quiet", type: "button", text: job.target });
+          button.addEventListener("click", () => openJob(job.id));
+          body.append(
+            el("tr", {}, [
+              el("td", { text: job.createdAt ?? "" }),
+              el("td", { text: stateLabel(job.state) }),
+              el("td", {}, [button]),
+              el("td", { text: job.user ?? "" }),
+            ]),
+          );
+        }
+        table.append(body);
+        return table;
+      };
+
+      const renderHome = async () => {
+        const result = await api("/api/home");
+        const data = result.body ?? {};
+        const engines = data.engines ?? {};
+        return el("section", {}, [
+          el("h1", { text: t("home") }),
+          el("h2", { text: t("engines") }),
+          el("div", { class: "grid" }, [
+            engineCard("ghidra", engines.ghidra),
+            engineCard("jadx", engines.jadx),
+            engineCard("rizin", engines.rizin),
+            engineCard("frida", engines.frida),
+            engineCard("doctor", engines.doctor),
+          ]),
+          el("h2", { text: t("queue") }),
+          (data.queue ?? []).length === 0
+            ? el("p", { class: "muted", text: t("empty") })
+            : jobTable(data.queue),
+          el("h2", { text: t("recent") }),
+          (data.recent ?? []).length === 0
+            ? el("p", { class: "muted", text: t("empty") })
+            : jobTable(data.recent),
+          footer(),
+        ]);
+      };
+
+      const kindSelect = (selected) => {
+        const select = el("select", { id: "kind", name: "kind" });
+        for (const kind of ["auto", "javascript", "android", "native", "website", "dotnet"]) {
+          const option = el("option", { value: kind, text: t(kind) });
+          if (kind === selected) option.selected = true;
+          select.append(option);
+        }
+        return select;
+      };
+
+      const renderNew = (preset = "") => {
+        const error = el("p", { class: "warn" });
+        const target = el("input", { id: "target", name: "target", type: "text", value: preset });
+        target.setAttribute("autocomplete", "off");
+        target.setAttribute("spellcheck", "false");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "target", text: t("target") }),
+          target,
+          el("label", { for: "kind", text: t("kind") }),
+          kindSelect("auto"),
+          el("button", { class: "primary", type: "submit", text: t("run") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/analyze", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              target: target.value,
+              kind: form.querySelector("#kind").value,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          openJob(response.body.id);
+        });
+        return el("section", {}, [
+          el("h1", { text: t("fresh") }),
+          el("p", { class: "muted", text: t("runHint") }),
+          form,
+          footer(),
+        ]);
+      };
+
+      const artifactCards = (job) => {
+        const wrap = el("div", { class: "grid" });
+        const cards = (job.artifacts ?? []).filter(
           (item) => item.lang === "both" || item.lang === lang,
         );
-        artifactWrap.hidden = list.length === 0;
-        for (const item of list) {
-          const card = document.createElement("article");
-          const heading = document.createElement("h3");
-          heading.textContent = lang === "en" ? item.title_en : item.title_pt;
-          const blurb = document.createElement("p");
-          blurb.textContent = lang === "en" ? item.blurb_en : item.blurb_pt;
-          card.append(heading, blurb);
-          if (item.href) {
-            const link = document.createElement("a");
-            link.href = item.href;
-            link.textContent = text[lang].open;
-            card.append(link);
+        for (const item of cards) {
+          const title = lang === "en" ? item.title_en : item.title_pt;
+          const blurb = lang === "en" ? item.blurb_en : item.blurb_pt;
+          const bits = [el("h2", { text: title ?? "" }), el("p", { text: blurb ?? "" })];
+          if (typeof item.href === "string" && item.href.startsWith("/packages/")) {
+            bits.push(el("a", { href: item.href, text: t("open") }));
           }
-          if (item.markdown_href) {
-            const link = document.createElement("a");
-            link.href = item.markdown_href;
-            link.textContent = "Markdown";
-            card.append(document.createTextNode(" "), link);
+          if (typeof item.markdown_href === "string" && item.markdown_href.startsWith("/packages/")) {
+            bits.push(document.createTextNode(" "));
+            bits.push(el("a", { href: item.markdown_href, text: "Markdown" }));
           }
-          artifacts.append(card);
+          wrap.append(el("article", { class: "card" }, bits));
         }
+        return wrap;
       };
 
-      const render = (job) => {
-        current = job;
-        status.textContent = job === null
-          ? text[lang].idle
-          : `${job.state} — ${job.detected ?? "detectando"} — ${job.target}`;
-        events.replaceChildren();
-        for (const event of job?.events ?? []) {
-          const item = document.createElement("li");
-          item.textContent = event.message;
-          events.append(item);
+      const renderJob = async () => {
+        const result = await api(`/api/jobs/${jobId}`);
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const job = result.body;
+        const active = job.state === "queued" || job.state === "running";
+        const actions = el("div", { class: "row" });
+        if (active) {
+          const cancel = el("button", { class: "primary", type: "button", text: t("cancel") });
+          cancel.addEventListener("click", async () => {
+            await api(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+            await show("job");
+          });
+          actions.append(cancel);
         }
-        renderArtifacts(job);
-        if (job?.state === "done" || job?.state === "failed") {
-          reportWrap.hidden = false;
-          reportLink.href = `/reports/${job.id}`;
-          reportLink.textContent = text[lang].reportLink;
-          report.replaceChildren();
-          const heading = document.createElement("p");
-          heading.textContent = job.headline ?? "";
-          report.append(heading);
-          if (job.report_markdown) {
-            const pre = document.createElement("pre");
-            pre.textContent = job.report_markdown;
-            report.append(pre);
-          }
-        }
-      };
-
-      const poll = (id) => {
-        clearInterval(timer);
-        timer = setInterval(async () => {
-          const response = await fetch(`/api/jobs/${id}`);
-          if (!response.ok) return;
-          const job = await response.json();
-          render(job);
-          if (job.state === "done" || job.state === "failed") {
-            clearInterval(timer);
-            submit.disabled = false;
-          }
-        }, 1000);
-      };
-
-      const resume = async () => {
-        const response = await fetch("/api/jobs");
-        if (!response.ok) return;
-        const list = await response.json();
-        const job = list.at(-1);
-        if (job === undefined) return;
-        render(job);
-        if (job.state === "queued" || job.state === "running") {
-          submit.disabled = true;
-          poll(job.id);
-        }
-      };
-      resume();
-
-      const applyLanguage = (next) => {
-        lang = next;
-        langPt.setAttribute("aria-pressed", lang === "pt-BR" ? "true" : "false");
-        langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
-        document.documentElement.lang = lang === "en" ? "en" : "pt-BR";
-        lede.textContent = text[lang].lede;
-        artifactTitle.textContent = text[lang].artifacts;
-        reportTitle.textContent = text[lang].report;
-        document.querySelector("label[for='target']").textContent = text[lang].label;
-        submit.textContent = text[lang].submit;
-        render(current);
-      };
-      langPt.addEventListener("click", () => applyLanguage("pt-BR"));
-      langEn.addEventListener("click", () => applyLanguage("en"));
-
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        submit.disabled = true;
-        reportWrap.hidden = true;
-        artifactWrap.hidden = true;
-        status.textContent = text[lang].sending;
-        const response = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ target: target.value }),
+        const rerun = el("button", { type: "button", text: t("rerun") });
+        rerun.addEventListener("click", async () => {
+          const response = await api(`/api/jobs/${job.id}/rerun`, { method: "POST" });
+          if (response.ok) openJob(response.body.id);
         });
-        const body = await response.json();
+        actions.append(rerun);
+        if (/^[A-Za-z0-9-]+$/u.test(job.id)) {
+          actions.append(el("a", { href: `/api/jobs/${job.id}/export.zip`, text: t("zip") }));
+          actions.append(el("a", { href: `/reports/${job.id}`, text: t("report") }));
+        }
+        const log = el("ul");
+        for (const event of job.events ?? []) log.append(el("li", { text: event.message }));
+        const map = (job.artifacts ?? []).find(
+          (item) => typeof item.href === "string" && item.href.endsWith("architecture.svg"),
+        );
+        const section = el("section", {}, [
+          el("h1", { text: stateLabel(job.state) }),
+          el("p", { text: job.target }),
+          el("p", { class: "muted", text: `${job.kind ?? "auto"} · ${job.user ?? ""}` }),
+          actions,
+          el("h2", { text: t("log") }),
+          log,
+        ]);
+        if (map) {
+          section.append(el("h2", { text: t("map") }));
+          section.append(el("img", { class: "map", alt: t("map"), src: map.href }));
+        }
+        section.append(el("h2", { text: t("results") }), artifactCards(job), footer());
+        return section;
+      };
+
+      const renderHistory = async () => {
+        const result = await api("/api/jobs");
+        const jobs = result.body ?? [];
+        return el("section", {}, [
+          el("h1", { text: t("history") }),
+          jobs.length === 0 ? el("p", { class: "muted", text: t("empty") }) : jobTable(jobs),
+          footer(),
+        ]);
+      };
+
+      const renderLibrary = async () => {
+        const result = await api("/api/targets");
+        const error = el("p", { class: "warn" });
+        const name = el("input", { id: "name", type: "text" });
+        const target = el("input", { id: "library-target", type: "text" });
+        const note = el("input", { id: "note", type: "text" });
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "name", text: t("name") }),
+          name,
+          el("label", { for: "library-target", text: t("target") }),
+          target,
+          el("label", { for: "kind", text: t("kind") }),
+          kindSelect("auto"),
+          el("label", { for: "note", text: t("note") }),
+          note,
+          el("button", { class: "primary", type: "submit", text: t("add") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/targets", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: name.value,
+              target: target.value,
+              kind: form.querySelector("#kind").value,
+              note_pt: note.value,
+              note_en: note.value,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await show("library");
+        });
+        const list = el("div");
+        for (const item of result.body ?? []) {
+          const analyze = el("button", { class: "primary", type: "button", text: t("run") });
+          analyze.addEventListener("click", async () => {
+            const response = await api("/api/analyze", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ target: item.target, kind: item.kind }),
+            });
+            if (response.ok) openJob(response.body.id);
+          });
+          const remove = el("button", { type: "button", text: t("remove") });
+          remove.addEventListener("click", async () => {
+            await api(`/api/targets/${item.id}`, { method: "DELETE" });
+            await show("library");
+          });
+          const noteText = lang === "en" ? item.note_en : item.note_pt;
+          list.append(
+            el("article", { class: "card" }, [
+              el("h2", { text: item.name }),
+              el("p", { text: item.target }),
+              el("p", { class: "muted", text: noteText || item.kind }),
+              el("div", { class: "row" }, [analyze, remove]),
+            ]),
+          );
+        }
+        return el("section", {}, [el("h1", { text: t("library") }), form, list, footer()]);
+      };
+
+      const engineFields = (engines) => {
+        const wrap = el("div");
+        for (const key of [
+          "GHIDRA_INSTALL_DIR",
+          "JAVA_HOME",
+          "REA_JADX_MCP_JAR",
+          "REA_RIZIN_COMMAND",
+          "REA_OBJDUMP_COMMAND",
+          "REA_GDB_COMMAND",
+          "GHIDRA_MCP_BIN",
+        ]) {
+          const input = el("input", { id: key, name: key, type: "text", value: engines?.[key] ?? "" });
+          wrap.append(el("label", { for: key, text: key }), input);
+        }
+        return wrap;
+      };
+
+      const renderSettings = async () => {
+        const result = await api("/api/settings");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const settings = result.body;
+        const notice = el("p", { class: "muted" });
+        const output = el("input", {
+          id: "output",
+          type: "text",
+          value: settings.outputDir ?? "",
+        });
+        output.setAttribute("placeholder", settings.effectiveOutput ?? "");
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "output", text: t("output") }),
+          output,
+          el("label", { for: "language", text: t("language") }),
+          kindSelect(settings.language === "en" ? "en" : "auto"),
+          engineFields(settings.engines),
+          el("button", { class: "primary", type: "submit", text: t("save") }),
+          notice,
+        ]);
+        const language = form.querySelector("select");
+        language.id = "language";
+        language.replaceChildren();
+        for (const [value, label] of [
+          ["pt-BR", "Português"],
+          ["en", "English"],
+        ]) {
+          const option = el("option", { value, text: label });
+          if (value === settings.language) option.selected = true;
+          language.append(option);
+        }
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const engines = {};
+          for (const input of form.querySelectorAll("input[name]")) engines[input.name] = input.value;
+          const response = await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              outputDir: output.value,
+              language: language.value,
+              theme,
+              engines,
+            }),
+          });
+          notice.textContent = response.ok ? t("saved") : message(response.body);
+          if (response.ok) {
+            lang = language.value === "en" ? "en" : "pt-BR";
+            applyChrome();
+            paintNav();
+          }
+        });
+        return el("section", {}, [
+          el("h1", { text: t("settings") }),
+          el("p", { text: settings.tokenConfigured ? t("tokenOn") : t("tokenOff") }),
+          form,
+          footer(),
+        ]);
+      };
+
+      const renderUsers = async () => {
+        const result = await api("/api/users");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const error = el("p", { class: "warn" });
+        const username = el("input", { id: "new-user", type: "text" });
+        const password = el("input", { id: "new-password", type: "password" });
+        const role = el("select", { id: "new-role" }, [
+          el("option", { value: "operator", text: t("operator") }),
+          el("option", { value: "admin", text: t("admin") }),
+        ]);
+        const form = el("form", { class: "card" }, [
+          el("label", { for: "new-user", text: t("user") }),
+          username,
+          el("label", { for: "new-password", text: t("password") }),
+          password,
+          el("label", { for: "new-role", text: t("role") }),
+          role,
+          el("button", { class: "primary", type: "submit", text: t("create") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/users", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: username.value,
+              password: password.value,
+              role: role.value,
+            }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await show("users");
+        });
+        const list = el("div");
+        for (const user of result.body ?? []) {
+          const toggle = el("button", {
+            type: "button",
+            text: user.disabled ? t("enable") : t("disable"),
+          });
+          toggle.addEventListener("click", async () => {
+            await api(`/api/users/${user.id}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ disabled: !user.disabled }),
+            });
+            await show("users");
+          });
+          const remove = el("button", { type: "button", text: t("remove") });
+          remove.addEventListener("click", async () => {
+            const response = await api(`/api/users/${user.id}`, { method: "DELETE" });
+            if (!response.ok) error.textContent = message(response.body);
+            await show("users");
+          });
+          list.append(
+            el("article", { class: "card" }, [
+              el("h2", { text: user.username }),
+              el("p", { class: "muted", text: `${user.role}${user.disabled ? " · off" : ""}` }),
+              el("div", { class: "row" }, [toggle, remove]),
+            ]),
+          );
+        }
+        return el("section", {}, [el("h1", { text: t("users") }), form, list, error, footer()]);
+      };
+
+      const renderAudit = async () => {
+        const result = await api("/api/audit");
+        if (!result.ok) return el("p", { class: "warn", text: message(result.body) });
+        const rows = result.body ?? [];
+        if (rows.length === 0)
+          return el("section", {}, [
+            el("h1", { text: t("audit") }),
+            el("p", { class: "muted", text: t("empty") }),
+            footer(),
+          ]);
+        const table = el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", { text: t("when") }),
+              el("th", { text: t("who") }),
+              el("th", { text: t("action") }),
+              el("th", { text: t("detail") }),
+            ]),
+          ]),
+        ]);
+        const body = el("tbody");
+        for (const row of rows) {
+          body.append(
+            el("tr", {}, [
+              el("td", { text: row.at ?? "" }),
+              el("td", { text: row.user ?? "" }),
+              el("td", { text: row.action ?? "" }),
+              el("td", { text: row.detail ?? "" }),
+            ]),
+          );
+        }
+        table.append(body);
+        return el("section", {}, [el("h1", { text: t("audit") }), table, footer()]);
+      };
+
+      const builders = {
+        home: renderHome,
+        fresh: () => renderNew(),
+        history: renderHistory,
+        job: renderJob,
+        library: renderLibrary,
+        settings: renderSettings,
+        users: renderUsers,
+        audit: renderAudit,
+      };
+
+      const paintNav = () => {
+        nav.replaceChildren();
+        const items = [
+          ["home", "home"],
+          ["fresh", "fresh"],
+          ["history", "history"],
+          ["library", "library"],
+        ];
+        if (me?.user?.role === "admin") {
+          items.push(["settings", "settings"], ["users", "users"], ["audit", "audit"]);
+        }
+        for (const [id, label] of items) {
+          const button = el("button", { type: "button", text: t(label) });
+          if (view === id) button.setAttribute("aria-current", "page");
+          button.addEventListener("click", () => show(id));
+          nav.append(button);
+        }
+      };
+
+      const render = async () => {
+        const token = generation;
+        const node = await (builders[view] ?? renderHome)();
+        if (token !== generation) return;
+        main.replaceChildren(node);
+      };
+
+      const show = async (next) => {
+        view = next;
+        generation += 1;
+        paintNav();
+        painting = true;
+        try {
+          await render();
+        } finally {
+          painting = false;
+        }
+      };
+
+      const openJob = (id) => {
+        jobId = id;
+        void show("job");
+      };
+
+      const showLogin = (text) => {
+        app.hidden = true;
+        login.hidden = false;
+        const error = el("p", { class: "warn", text: text ?? "" });
+        const user = el("input", { id: "login-user", name: "username", type: "text" });
+        user.setAttribute("autocomplete", "username");
+        const password = el("input", {
+          id: "login-password",
+          name: "password",
+          type: "password",
+        });
+        password.setAttribute("autocomplete", "current-password");
+        const form = el("form", { class: "card" }, [
+          el("h1", { text: t("title") }),
+          el("p", { class: "muted", text: t("hint") }),
+          el("label", { for: "login-user", text: t("user") }),
+          user,
+          el("label", { for: "login-password", text: t("password") }),
+          password,
+          el("button", { id: "login-submit", class: "primary", type: "submit", text: t("enter") }),
+          error,
+        ]);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const response = await api("/api/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ username: user.value, password: password.value }),
+          });
+          if (!response.ok) {
+            error.textContent = message(response.body);
+            return;
+          }
+          await boot();
+        });
+        login.replaceChildren(form);
+      };
+
+      const boot = async () => {
+        applyChrome();
+        const response = await api("/api/me");
         if (!response.ok) {
-          status.textContent = body.message ?? "Não foi possível iniciar.";
-          status.classList.add("warn");
-          submit.disabled = false;
+          me = null;
+          showLogin();
           return;
         }
-        status.classList.remove("warn");
-        render(body);
-        poll(body.id);
+        me = response.body;
+        lang = me.settings?.language === "en" ? "en" : "pt-BR";
+        theme = me.settings?.theme === "dark" ? "dark" : "light";
+        applyChrome();
+        login.hidden = true;
+        app.hidden = false;
+        await show(view);
+      };
+
+      themeButton.addEventListener("click", async () => {
+        theme = theme === "dark" ? "light" : "dark";
+        applyChrome();
+        if (me) {
+          await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ theme }),
+          });
+        }
       });
+      langButton.addEventListener("click", async () => {
+        lang = lang === "en" ? "pt-BR" : "en";
+        applyChrome();
+        paintNav();
+        if (me) {
+          await api("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ language: lang }),
+          });
+          await show(view);
+        } else showLogin();
+      });
+      logoutButton.addEventListener("click", async () => {
+        await api("/api/logout", { method: "POST" });
+        me = null;
+        view = "home";
+        showLogin();
+      });
+      setInterval(() => {
+        if (painting || !me) return;
+        if (!["home", "history", "job"].includes(view)) return;
+        painting = true;
+        render().finally(() => {
+          painting = false;
+        });
+      }, 1000);
+      boot();
     </script>
   </body>
 </html>
